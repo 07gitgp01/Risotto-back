@@ -31,13 +31,10 @@ export class SearchService {
       .select('p.user_id', 'userId')
       .where(`p.visibility <> 'private'`)
       .andWhere('p.user_id NOT IN (:...excluded)', { excluded })
+      // Same expression as the trigram index IDX_profiles_search (see the migration).
       .andWhere(
-        `unaccent(lower(
-          CASE WHEN p.visibility = 'public'
-            THEN concat_ws(' ', p.first_name, p.last_name, p.headline, p.job_title, p.company)
-            ELSE concat_ws(' ', p.first_name, p.last_name, p.headline)
-          END
-        )) LIKE '%' || unaccent(lower(:term)) || '%'`,
+        `profile_search_text(p.visibility, p.first_name, p.last_name, p.headline,
+           p.job_title, p.company) LIKE '%' || unaccent(lower(:term)) || '%'`,
         { term: escapeLike(query.q) },
       )
       .orderBy('p.first_name', 'ASC')
@@ -48,17 +45,13 @@ export class SearchService {
       .getRawMany<{ userId: string }>();
 
     const ids = rows.map((row) => row.userId);
-    const views = await this.profileViews.viewsFor(viewerId, ids);
-    const results: SearchResult[] = [];
-    for (const id of ids) {
+    const [views, states] = await Promise.all([
+      this.profileViews.viewsFor(viewerId, ids),
+      this.relationships.connectionStates(viewerId, ids),
+    ]);
+    return ids.flatMap((id) => {
       const view = views.get(id);
-      if (view) {
-        results.push({
-          ...view,
-          connection: await this.relationships.connectionState(viewerId, id),
-        });
-      }
-    }
-    return results;
+      return view ? [{ ...view, connection: states.get(id)! }] : [];
+    });
   }
 }

@@ -70,14 +70,7 @@ export class MessagingService {
       .addOrderBy('c.created_at', 'DESC')
       .take(200)
       .getMany();
-    const views: ConversationView[] = [];
-    for (const row of rows) {
-      const view = await this.view(viewerId, row).catch(() => null);
-      if (view) {
-        views.push(view);
-      }
-    }
-    return views;
+    return this.views(viewerId, rows);
   }
 
   async get(viewerId: string, conversationId: string): Promise<ConversationView> {
@@ -218,31 +211,75 @@ export class MessagingService {
   }
 
   private async view(viewerId: string, conversation: Conversation): Promise<ConversationView> {
-    const otherId = this.otherOf(conversation, viewerId);
-    const profile = (await this.profiles.viewsFor(viewerId, [otherId])).get(otherId);
-    if (!profile) {
+    const [view] = await this.views(viewerId, [conversation]);
+    if (!view) {
       throw new NotFoundException(CONVERSATION_NOT_FOUND);
     }
-    const markers = this.readMarkers(conversation, viewerId);
-    const last = await this.messages.findOne({
-      where: { conversationId: conversation.id },
-      order: { createdAt: 'DESC', id: 'DESC' },
+    return view;
+  }
+
+  /**
+   * Views of many conversations in a constant number of queries (profiles, relationships,
+   * last messages, unread counts). Conversations with a blocked member are left out.
+   */
+  private async views(
+    viewerId: string,
+    conversations: Conversation[],
+  ): Promise<ConversationView[]> {
+    if (conversations.length === 0) {
+      return [];
+    }
+    const ids = conversations.map((c) => c.id);
+    const otherIds = conversations.map((c) => this.otherOf(c, viewerId));
+
+    const [relationships, profiles, lastMessages, unreadRows] = await Promise.all([
+      this.relationships.resolveMany(viewerId, otherIds),
+      this.profiles.viewsFor(viewerId, otherIds),
+      this.messages
+        .createQueryBuilder('m')
+        .distinctOn(['m.conversation_id'])
+        .where('m.conversation_id IN (:...ids)', { ids })
+        .orderBy('m.conversation_id')
+        .addOrderBy('m.created_at', 'DESC')
+        .addOrderBy('m.id', 'DESC')
+        .getMany(),
+      this.messages.query<{ id: string; count: string }[]>(
+        `SELECT m.conversation_id AS id, count(*) AS count
+         FROM messages m
+         JOIN conversations c ON c.id = m.conversation_id
+         WHERE m.conversation_id = ANY($2::uuid[])
+           AND m.sender_id <> $1
+           AND m.created_at > COALESCE(
+             CASE WHEN c.user_a_id = $1 THEN c.user_a_last_read_at ELSE c.user_b_last_read_at END,
+             '-infinity'::timestamptz
+           )
+         GROUP BY m.conversation_id`,
+        [viewerId, ids],
+      ),
+    ]);
+    const lastByConversation = new Map(lastMessages.map((m) => [m.conversationId, m]));
+    const unread = new Map(unreadRows.map((row) => [row.id, Number(row.count)]));
+
+    return conversations.flatMap((conversation) => {
+      const otherId = this.otherOf(conversation, viewerId);
+      const profile = profiles.get(otherId);
+      const relationship = relationships.get(otherId);
+      if (!profile || relationship === 'blocked') {
+        return [];
+      }
+      const last = lastByConversation.get(conversation.id);
+      return [
+        {
+          id: conversation.id,
+          user: profile,
+          lastMessage: last ? this.toView(last) : null,
+          unreadCount: unread.get(conversation.id) ?? 0,
+          otherLastReadAt: this.readMarkers(conversation, viewerId).other?.toISOString() ?? null,
+          canSend: relationship === 'connected',
+          updatedAt: (conversation.lastMessageAt ?? conversation.createdAt).toISOString(),
+        },
+      ];
     });
-    const unreadCount = await this.messages
-      .createQueryBuilder('m')
-      .where('m.conversation_id = :id', { id: conversation.id })
-      .andWhere('m.sender_id <> :viewerId', { viewerId })
-      .andWhere(markers.mine ? 'm.created_at > :since' : 'TRUE', { since: markers.mine })
-      .getCount();
-    return {
-      id: conversation.id,
-      user: profile,
-      lastMessage: last ? this.toView(last) : null,
-      unreadCount,
-      otherLastReadAt: markers.other?.toISOString() ?? null,
-      canSend: await this.relationships.areConnected(viewerId, otherId),
-      updatedAt: (conversation.lastMessageAt ?? conversation.createdAt).toISOString(),
-    };
   }
 
   private toView(message: Message): MessageView {

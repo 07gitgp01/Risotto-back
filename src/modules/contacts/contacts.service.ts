@@ -74,12 +74,8 @@ export class ContactsService {
       order: { createdAt: 'DESC' },
       take: 500,
     });
-    const visible: SavedContact[] = [];
-    for (const contact of saved) {
-      if ((await this.relationships.resolve(ownerId, contact.contactId)) !== 'blocked') {
-        visible.push(contact);
-      }
-    }
+    const blocked = new Set(await this.relationships.blockedUserIds(ownerId));
+    const visible = saved.filter((contact) => !blocked.has(contact.contactId));
     const cards = new Map(
       (await this.cardsFor(visible.map((c) => c.contactId))).map((card) => [card.userId, card]),
     );

@@ -85,10 +85,11 @@ export class ProfilesService {
       this.users.findByIds(ownerIds),
     ]);
     const emails = new Map(users.map((user) => [user.id, user.email]));
+    const relationships = await this.relationships.resolveMany(viewerId, ownerIds);
     for (const profile of profiles) {
       const access = profileAccess(
         profile.visibility,
-        await this.relationships.resolve(viewerId, profile.userId),
+        relationships.get(profile.userId) ?? 'stranger',
       );
       if (access !== 'none') {
         views.set(profile.userId, toProfileView(profile, emails.get(profile.userId) ?? '', access));

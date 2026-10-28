@@ -1,10 +1,20 @@
-import { Column, Entity, JoinColumn, OneToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  OneToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { User } from '../users/user.entity';
 
 export const PROFILE_VISIBILITIES = ['public', 'connections', 'private'] as const;
 export type ProfileVisibility = (typeof PROFILE_VISIBILITIES)[number];
 
 @Entity({ name: 'profiles' })
+// Expression index managed by its migration (TypeORM cannot describe it).
+@Index('IDX_profiles_search', { synchronize: false })
 export class Profile {
   @PrimaryColumn({ name: 'user_id', type: 'uuid' })
   userId: string;
