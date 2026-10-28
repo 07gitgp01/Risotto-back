@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, Reflector } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import Redis from 'ioredis';
@@ -18,6 +19,7 @@ import { ConnectionsModule } from './modules/connections/connections.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { MailModule } from './modules/mail/mail.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { UsersModule } from './modules/users/users.module';
@@ -38,6 +40,7 @@ const reflector = new Reflector();
         buildDataSourceOptions(config.getOrThrow<AppConfig['db']>('db')),
     }),
     RedisModule,
+    EventEmitterModule.forRoot(),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService, REDIS_CLIENT],
       useFactory: (config: ConfigService, redis: Redis) => ({
@@ -72,6 +75,7 @@ const reflector = new Reflector();
     ConnectionsModule,
     RealtimeModule,
     MessagingModule,
+    NotificationsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
