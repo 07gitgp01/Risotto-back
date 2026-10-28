@@ -95,7 +95,7 @@ test/                tests unitaires et de widgets
 - Serveur → client : `message:new`, `conversation:read`, `notification:new`, `connection:update`.
 - Chaque socket rejoint la room `user:<id>` ; les émissions passent par l'adapter Redis.
 
-## Choix pris en mode autonome (à valider)
+## Choix pris (validés ou pris en autonomie, voir les CLAUDE.md)
 - Visibilité : `public` (tout utilisateur connecté, présent dans la recherche), `connections` (profil complet pour les relations, aperçu nom + titre + photo pour les autres, présent dans la recherche), `private` (nom seul, absent de la recherche).
 - QR code : contient `risotto://u/<qr_token>` (jeton aléatoire 256 bits, créé au premier affichage, régénérable ; jamais l'id utilisateur). Régénérer invalide l'ancien QR mais conserve les contacts déjà enregistrés.
 - Scanner un QR révèle la **carte de contact** (nom, titre, poste, entreprise, ville, site, photo ; email/téléphone selon les partages) même si le profil est privé : montrer son QR est un acte de partage volontaire. La bio n'en fait pas partie.
