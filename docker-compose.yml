@@ -52,6 +52,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
     ports:
       # 0.0.0.0 so the Android emulator (10.0.2.2) and a physical device on the LAN can reach it.
       - '${PORT:-3000}:3000'
@@ -64,5 +67,6 @@ services:
         condition: service_started
 
 volumes:
+  uploads:
   postgres-data:
   redis-data:

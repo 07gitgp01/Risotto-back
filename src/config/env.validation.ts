@@ -33,6 +33,12 @@ export const envValidationSchema = Joi.object<Record<string, unknown>>({
   SMTP_USER: Joi.string().allow('').default(''),
   SMTP_PASSWORD: Joi.string().allow('').default(''),
   MAIL_FROM: Joi.string().default('Risotto <no-reply@risotto.local>'),
+
+  UPLOAD_DIR: Joi.string().default('./uploads'),
+  PHOTO_MAX_BYTES: Joi.number()
+    .integer()
+    .positive()
+    .default(5 * 1024 * 1024),
 });
 
 export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {

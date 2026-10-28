@@ -32,6 +32,10 @@ export interface AppConfig {
     password: string;
     from: string;
   };
+  uploads: {
+    dir: string;
+    photoMaxBytes: number;
+  };
 }
 
 export function parseCorsOrigins(raw: string | undefined): string[] {
@@ -75,5 +79,9 @@ export default (): AppConfig => ({
     user: process.env.SMTP_USER ?? '',
     password: process.env.SMTP_PASSWORD ?? '',
     from: process.env.MAIL_FROM ?? 'Risotto <no-reply@risotto.local>',
+  },
+  uploads: {
+    dir: process.env.UPLOAD_DIR ?? './uploads',
+    photoMaxBytes: Number(process.env.PHOTO_MAX_BYTES ?? 5 * 1024 * 1024),
   },
 });
