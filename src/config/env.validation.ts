@@ -1,5 +1,14 @@
 import * as Joi from 'joi';
 
+/** Base64 string that decodes to exactly 32 bytes (AES-256 key). */
+const aes256Key = Joi.string().custom((value: string, helpers) => {
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.length !== 32 || bytes.toString('base64') !== value) {
+    return helpers.error('any.invalid');
+  }
+  return value;
+}, 'base64-encoded 32-byte key');
+
 export const envValidationSchema = Joi.object<Record<string, unknown>>({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
   PORT: Joi.number().port().default(3000),
@@ -33,6 +42,8 @@ export const envValidationSchema = Joi.object<Record<string, unknown>>({
   SMTP_USER: Joi.string().allow('').default(''),
   SMTP_PASSWORD: Joi.string().allow('').default(''),
   MAIL_FROM: Joi.string().default('Risotto <no-reply@risotto.local>'),
+
+  MESSAGE_ENCRYPTION_KEY: aes256Key.required(),
 
   UPLOAD_DIR: Joi.string().default('./uploads'),
   PHOTO_MAX_BYTES: Joi.number()

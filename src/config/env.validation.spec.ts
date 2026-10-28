@@ -9,6 +9,7 @@ const validEnv = {
   JWT_ACCESS_SECRET: 'a'.repeat(32),
   TOKEN_HASH_SECRET: 'b'.repeat(32),
   SMTP_HOST: 'localhost',
+  MESSAGE_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 };
 
 describe('validateEnv', () => {
@@ -38,6 +39,7 @@ describe('validateEnv', () => {
     'JWT_ACCESS_SECRET',
     'TOKEN_HASH_SECRET',
     'SMTP_HOST',
+    'MESSAGE_ENCRYPTION_KEY',
   ])('rejects a missing %s', (key) => {
     const env: Record<string, unknown> = { ...validEnv };
     delete env[key];
@@ -52,6 +54,14 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...validEnv, JWT_ACCESS_SECRET: 'short' })).toThrow(
       'JWT_ACCESS_SECRET',
     );
+  });
+
+  it('rejects a message key that is not 32 bytes of base64', () => {
+    for (const key of [Buffer.alloc(16).toString('base64'), 'not base64!', 'a'.repeat(44)]) {
+      expect(() => validateEnv({ ...validEnv, MESSAGE_ENCRYPTION_KEY: key })).toThrow(
+        'MESSAGE_ENCRYPTION_KEY',
+      );
+    }
   });
 
   it('rejects a non-redis REDIS_URL', () => {

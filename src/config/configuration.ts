@@ -36,6 +36,10 @@ export interface AppConfig {
     dir: string;
     photoMaxBytes: number;
   };
+  messaging: {
+    /** AES-256-GCM key for messages at rest (base64, 32 bytes). */
+    encryptionKey: string;
+  };
 }
 
 export function parseCorsOrigins(raw: string | undefined): string[] {
@@ -83,5 +87,8 @@ export default (): AppConfig => ({
   uploads: {
     dir: process.env.UPLOAD_DIR ?? './uploads',
     photoMaxBytes: Number(process.env.PHOTO_MAX_BYTES ?? 5 * 1024 * 1024),
+  },
+  messaging: {
+    encryptionKey: process.env.MESSAGE_ENCRYPTION_KEY ?? '',
   },
 });

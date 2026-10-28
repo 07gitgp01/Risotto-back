@@ -50,6 +50,8 @@ jobs:
       JWT_ACCESS_SECRET: ci-only-jwt-secret-not-used-anywhere-else-0123456789
       TOKEN_HASH_SECRET: ci-only-hash-secret-not-used-anywhere-else-0123456789
       SMTP_HOST: localhost
+      # 32 zero bytes: CI only.
+      MESSAGE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 
     steps:
       - uses: actions/checkout@v4
