@@ -94,6 +94,7 @@ describe('QR codes and contacts (e2e)', () => {
       expect(res.body).toEqual({
         isSelf: false,
         saved: false,
+        connection: { status: 'none', connectionId: null },
         card: {
           userId: alice.id,
           firstName: 'Alice',
