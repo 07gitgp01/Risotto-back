@@ -53,13 +53,14 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - TypeORM : `uuidExtension: 'pgcrypto'` (gen_random_uuid), colonnes en snake_case via `name:` explicite. `returning()` du QueryBuilder : passer une chaîne SQL (`'user_id, family_id'`), un tableau est ignoré silencieusement.
 - Visibilité : toute règle d'accès passe par `RelationshipService.resolve(viewer, owner)` (`self`/`connected`/`stranger`/`blocked`) puis `profileAccess()`. Ne pas dupliquer la logique ailleurs.
 - DTO : `@OptionalNotNull()` pour un champ facultatif qui ne doit jamais valoir null (sinon `@IsOptional` laisse passer null → 500).
+- QR : `risotto://u/<token>` (`parseQrPayload`). La carte de contact (`toContactCard`) ignore la visibilité mais respecte share_email/share_phone.
 - Test anti-dérive : `app.e2e-spec.ts` échoue si les entités et les migrations divergent.
 
 ## Jalons
 - [x] 1. Fondations (structure, Docker Compose, CI, config env)
 - [x] 2. Authentification (inscription, connexion, refresh, déconnexion, reset mot de passe)
 - [x] 3. Profil (création, édition, photo, visibilité)
-- [ ] 4. Contacts et partage (carte de contact, QR code personnel, scan)
+- [x] 4. Contacts et partage (carte de contact, QR code personnel, scan)
 - [ ] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
 - [ ] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)
 - [ ] 7. Notifications (temps réel, push FCM, préférences)

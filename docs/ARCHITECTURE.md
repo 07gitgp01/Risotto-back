@@ -58,7 +58,7 @@ test/                tests unitaires et de widgets
 | `refresh_tokens` | id, user_id FK, family_id, token_hash (unique), expires_at, used_at, revoked_at, created_at, user_agent | index (user_id), (family_id) |
 | `password_reset_codes` | id, user_id FK, code_hash (HMAC-SHA256), expires_at, used_at, failed_attempts, created_at | TTL 30 min, 5 essais, seul le dernier code est valide |
 | `profiles` | user_id PK/FK, first_name, last_name, headline, job_title, company, bio, location, phone, website, photo_key, visibility (`public`/`connections`/`private`, défaut `connections`), share_email, share_phone (défaut false), updated_at | créé à l'onboarding (`POST /profiles/me`) |
-| `saved_contacts` | id, owner_id FK, contact_id FK, note, created_at | unique (owner_id, contact_id) |
+| `saved_contacts` | id, owner_id FK, contact_id FK, note (≤ 500, privée), created_at | unique (owner_id, contact_id) |
 | `connections` | id, requester_id FK, addressee_id FK, status (`pending`/`accepted`/`declined`), created_at, responded_at | unique paire non orientée (least, greatest) |
 | `blocks` | blocker_id FK, blocked_id FK, created_at | PK (blocker_id, blocked_id) |
 | `conversations` | id, user_a_id, user_b_id (a < b), last_message_at, created_at | unique (user_a_id, user_b_id) |
@@ -77,8 +77,8 @@ test/                tests unitaires et de widgets
 | Utilisateur | `GET /users/me` | soi-même |
 | Profil | `GET/POST/PATCH /profiles/me`, `PUT/DELETE /profiles/me/photo` | soi-même |
 | Profil | `GET /profiles/:userId`, `GET /profiles/:userId/photo` | selon visibilité, 404 si bloqué |
-| Contacts | `GET /contacts/card/me`, `GET /contacts`, `DELETE /contacts/:id` | propriétaire |
-| QR | `GET /qr/me`, `POST /qr/me/rotate`, `POST /qr/scan` (`connect` ou `save_contact`) | authentifié |
+| Contacts | `GET /contacts/card/me`, `GET /contacts`, `PATCH /contacts/:contactId {note}`, `DELETE /contacts/:contactId` | propriétaire |
+| QR | `GET /qr/me`, `POST /qr/me/rotate`, `POST /qr/scan {payload, saveContact?}` (aperçu ou enregistrement ; la demande de relation par QR arrive au jalon 5) | authentifié, scan limité à 30/min |
 | Recherche | `GET /users/search?q=` | profils publics/connexions, hors bloqués |
 | Relations | `POST /connections`, `GET /connections`, `GET /connections/requests?direction=incoming\|outgoing` | parties concernées |
 | Relations | `POST /connections/:id/accept`, `/decline` | destinataire uniquement |
@@ -97,7 +97,10 @@ test/                tests unitaires et de widgets
 
 ## Choix pris en mode autonome (à valider)
 - Visibilité : `public` (tout utilisateur connecté, présent dans la recherche), `connections` (profil complet pour les relations, aperçu nom + titre + photo pour les autres, présent dans la recherche), `private` (nom seul, absent de la recherche).
-- QR code : contient `risotto://u/<qr_token>` (jeton aléatoire révocable, pas l'id utilisateur).
+- QR code : contient `risotto://u/<qr_token>` (jeton aléatoire 256 bits, créé au premier affichage, régénérable ; jamais l'id utilisateur). Régénérer invalide l'ancien QR mais conserve les contacts déjà enregistrés.
+- Scanner un QR révèle la **carte de contact** (nom, titre, poste, entreprise, ville, site, photo ; email/téléphone selon les partages) même si le profil est privé : montrer son QR est un acte de partage volontaire. La bio n'en fait pas partie.
+- Un contact enregistré voit la photo de la carte même si le profil est privé ; la carte reste à jour avec le profil.
+- Partage hors app : export vCard 3.0 via la feuille de partage du système.
 - Carte de contact : email/téléphone inclus uniquement si `share_email` / `share_phone` activés.
 - Messagerie : conversations 1-à-1 uniquement, réservées aux utilisateurs en relation acceptée.
 - Reset mot de passe (validé) : **code à 6 chiffres** envoyé par email (Mailpit en local), valable 30 min, usage unique, 5 essais maximum, révoque toutes les sessions. `POST /auth/reset-password {email, code, newPassword}`.

@@ -77,7 +77,14 @@ Préfixe `/api`. Toutes les routes exigent `Authorization: Bearer <accessToken>`
 | `PUT /profiles/me/photo` | connecté | multipart, champ `photo` : JPEG/PNG/WebP ≤ 5 Mo, réencodée en WebP 512 px sans métadonnées |
 | `DELETE /profiles/me/photo` | connecté | supprime ma photo |
 | `GET /profiles/:userId` | connecté | profil d'un membre, filtré selon sa visibilité (`access`: `full`, `preview`, `minimal`) |
-| `GET /profiles/:userId/photo` | connecté | photo d'un membre (visible à partir du niveau `preview`) |
+| `GET /profiles/:userId/photo` | connecté | photo d'un membre (visible à partir du niveau `preview`, ou si sa carte est dans mes contacts) |
+| `GET /qr/me` | connecté | mon QR code : `{token, payload}` où `payload = risotto://u/<token>` |
+| `POST /qr/me/rotate` | connecté | nouveau QR code ; l'ancien ne fonctionne plus |
+| `POST /qr/scan` | connecté | `{payload, saveContact?}` → carte de contact du propriétaire du QR (30 scans/min) |
+| `GET /contacts/card/me` | connecté | ma carte, telle que les autres la reçoivent |
+| `GET /contacts` | connecté | mes contacts enregistrés (cartes à jour + note privée) |
+| `PATCH /contacts/:contactId` | connecté | `{note}` ; `""` efface la note |
+| `DELETE /contacts/:contactId` | connecté | retire un contact |
 
 Les routes `/auth/*` ont une limitation de débit renforcée (`THROTTLE_AUTH_LIMIT` par minute et par IP).
 
