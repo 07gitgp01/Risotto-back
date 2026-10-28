@@ -1,16 +1,22 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, Reflector } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import Redis from 'ioredis';
+import { AUTH_RATE_LIMIT_KEY } from './common/auth/auth.decorators';
 import { REDIS_CLIENT } from './common/redis/redis.constants';
 import { RedisModule } from './common/redis/redis.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import configuration, { AppConfig } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { buildDataSourceOptions } from './database/typeorm-options';
+import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { MailModule } from './modules/mail/mail.module';
+import { UsersModule } from './modules/users/users.module';
+
+const reflector = new Reflector();
 
 @Module({
   imports: [
@@ -35,11 +41,25 @@ import { HealthModule } from './modules/health/health.module';
             ttl: config.getOrThrow<number>('throttle.ttlMs'),
             limit: config.getOrThrow<number>('throttle.limit'),
           },
+          {
+            // Stricter budget, only on routes marked @AuthRateLimit().
+            name: 'auth',
+            ttl: config.getOrThrow<number>('throttle.authTtlMs'),
+            limit: config.getOrThrow<number>('throttle.authLimit'),
+            skipIf: (context) =>
+              !reflector.getAllAndOverride<boolean>(AUTH_RATE_LIMIT_KEY, [
+                context.getHandler(),
+                context.getClass(),
+              ]),
+          },
         ],
         storage: new RedisThrottlerStorage(redis),
       }),
     }),
     HealthModule,
+    MailModule,
+    UsersModule,
+    AuthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

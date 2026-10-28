@@ -1,7 +1,9 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
+import { Public } from '../../common/auth/auth.decorators';
 import { HealthReport, HealthService } from './health.service';
 
+@Public()
 @SkipThrottle()
 @Controller('health')
 export class HealthController {
