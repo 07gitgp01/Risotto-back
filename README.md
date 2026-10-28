@@ -136,10 +136,38 @@ Toutes les variables sont documentées dans [.env.example](.env.example) et vali
 ## Sécurité
 
 - Mots de passe hachés en argon2id ; access token JWT (HS256) de 15 min et refresh token opaque à rotation. Seule l'empreinte SHA-256 du refresh token est stockée. Réutiliser un refresh token déjà consommé révoque toute la session (détection de vol).
+- Révocation immédiate des access tokens : déconnexion (la session), déconnexion partout et changement de mot de passe (toutes les sessions), réutilisation d'un refresh token (la session). Vérifiée à chaque requête et à l'ouverture d'un WebSocket, avec un cache Redis et la base comme source de vérité.
+- Verrouillage par compte : 10 mots de passe faux en 15 min bloquent les connexions à ce compte (429), quelle que soit l'IP ; même comportement pour un email inconnu.
 - Codes de réinitialisation stockés sous forme d'HMAC (clé `TOKEN_HASH_SECRET`), valables 30 min, 5 essais maximum.
-- Un access token reste valable jusqu'à son expiration (15 min max) après une déconnexion ou un changement de mot de passe : seuls les refresh tokens sont révoqués.
 - Validation stricte des entrées (class-validator, propriétés inconnues refusées), helmet, CORS restreint à `CORS_ORIGINS`, limitation de débit stockée dans Redis.
 - Les erreurs renvoyées ne contiennent jamais de stack trace ni de message interne.
+
+### Revue de sécurité (jalon 9)
+
+| Point vérifié | État |
+|---|---|
+| Authentification, rotation et révocation des jetons | tests e2e `auth`, `security` |
+| Contrôle d'accès sur chaque route (401 sans jeton, 403/404 sur la ressource d'un autre) | testé par suite e2e |
+| Énumération de comptes (login, mot de passe oublié, reset) | réponses identiques, testé |
+| Injections SQL | requêtes paramétrées uniquement (QueryBuilder / `$1`) |
+| Entrées | DTO stricts (propriétés inconnues refusées), corps JSON limité à 100 ko (413) |
+| Fichiers envoyés | format vérifié par décodage, image réencodée sans métadonnées |
+| Secrets | `.env` ignoré, validé au démarrage, aucun secret dans Git ni dans les logs |
+| Dépendances | `npm audit --omit=dev` : 0 vulnérabilité (multer et uuid forcés à des versions corrigées via `overrides`, nodemailer 10) |
+| Conteneur | image Node 20 Alpine, utilisateur non root ; PostgreSQL, Redis et Mailpit exposés sur 127.0.0.1 uniquement |
+
+Limites connues, à traiter avant toute mise en production :
+
+- Pas de TLS en local : à placer derrière un reverse proxy HTTPS.
+- Redis sans mot de passe (accessible seulement depuis la machine) : en ajouter un en production.
+- La clé `MESSAGE_ENCRYPTION_KEY` est unique (version 1) ; la rotation est prévue dans `MessageCipher` mais pas outillée.
+- Pas de suppression de compte ni d'export des données (RGPD) : à ajouter.
+
+### Performances
+
+- Listes (conversations, contacts, recherche, relations) : nombre de requêtes SQL constant, quelle que soit la taille de la liste (test `performance.e2e-spec.ts`).
+- Recherche de membres : expression `profile_search_text()` indexée par un index GIN trigram (`pg_trgm`), utilisable avec `LIKE '%…%'`.
+- Historique de messages et notifications paginés par curseur (index `(conversation_id, created_at, id)` et `(user_id, created_at)`).
 
 ### Chiffrement de la messagerie : ce n'est pas du bout en bout
 

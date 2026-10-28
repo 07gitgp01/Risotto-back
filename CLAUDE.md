@@ -59,6 +59,8 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - Messages : chiffrés par `MessageCipher` (AES-256-GCM, AAD `conversationId:senderId`) ; ne jamais logger un corps de message.
 - `socket.io` doit avoir la même version que celle de `@nestjs/platform-socket.io` (sinon conflit de types) : `npm ls socket.io`.
 - Notifications : les modules métier émettent des évènements (`DomainEvents`) via `EventEmitter2` ; seul `NotificationsService` crée notifications et pushs (handlers `async`, erreurs absorbées). En test, `createTestApp()` remplace FCM par `FakePushSender` (`push.sent`) ; `eventually()` attend les handlers asynchrones.
+- Révocation des access tokens : claims `sid` (famille de refresh) et `iatMs` ; `TokensService.isAccessTokenRevoked()` est appelé par le guard HTTP et le middleware WebSocket. Tout nouveau point d'entrée authentifié doit l'appeler aussi.
+- Index d'expression gérés à la main (`IDX_profiles_search`) : déclarés `@Index(..., { synchronize: false })` pour que TypeORM ne les supprime pas.
 - Test anti-dérive : `app.e2e-spec.ts` échoue si les entités et les migrations divergent.
 
 ## Jalons
@@ -70,4 +72,4 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - [x] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)
 - [x] 7. Notifications (temps réel, push FCM, préférences)
 - [x] 8. Tableau de bord (demandes en attente, non lus, activité récente)
-- [ ] 9. Finalisation (revue sécurité, performances, accessibilité, hors ligne)
+- [x] 9. Finalisation (revue sécurité, performances, accessibilité, hors ligne)
