@@ -5,9 +5,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { parseQrPayload } from '../contacts/contact-card';
+import {
+  ConnectionAcceptedEvent,
+  ConnectionRequestedEvent,
+  DomainEvents,
+} from '../notifications/notification-types';
 import { Profile } from '../profiles/profile.entity';
 import { ProfilesService } from '../profiles/profiles.service';
 import { RelationshipService } from '../relationships/relationship.service';
@@ -29,6 +35,7 @@ export class ConnectionsService {
     @InjectRepository(Profile) private readonly profiles: Repository<Profile>,
     private readonly relationships: RelationshipService,
     private readonly profileViews: ProfilesService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -62,10 +69,17 @@ export class ConnectionsService {
 
   async accept(viewerId: string, connectionId: string): Promise<ConnectionView> {
     const connection = await this.getPendingAddressedTo(viewerId, connectionId);
-    await this.connections.update(
+    const result = await this.connections.update(
       { id: connection.id, status: 'pending' },
       { status: 'accepted', respondedAt: new Date() },
     );
+    if (result.affected === 1) {
+      this.events.emit(DomainEvents.connectionAccepted, {
+        connectionId: connection.id,
+        requesterId: connection.requesterId,
+        accepterId: viewerId,
+      } satisfies ConnectionAcceptedEvent);
+    }
     return this.view(viewerId, connection.id);
   }
 
@@ -153,7 +167,9 @@ export class ConnectionsService {
         addresseeId: targetId,
         message,
       });
-      return this.view(viewerId, (identifiers[0] as { id: string }).id);
+      const id = (identifiers[0] as { id: string }).id;
+      this.emitRequested(id, viewerId, targetId);
+      return this.view(viewerId, id);
     }
 
     if (existing.status === 'accepted') {
@@ -185,7 +201,16 @@ export class ConnectionsService {
         createdAt: new Date(),
       },
     );
+    this.emitRequested(existing.id, viewerId, targetId);
     return this.view(viewerId, existing.id);
+  }
+
+  private emitRequested(connectionId: string, requesterId: string, addresseeId: string): void {
+    this.events.emit(DomainEvents.connectionRequested, {
+      connectionId,
+      requesterId,
+      addresseeId,
+    } satisfies ConnectionRequestedEvent);
   }
 
   private async getForParty(viewerId: string, connectionId: string): Promise<Connection> {

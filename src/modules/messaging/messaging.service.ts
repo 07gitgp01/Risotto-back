@@ -1,10 +1,12 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { MessageCipher } from '../../common/crypto/message-cipher';
 import { AppConfig } from '../../config/configuration';
 import { orderedPair } from '../connections/entities/connection.entity';
+import { DomainEvents, MessageCreatedEvent } from '../notifications/notification-types';
 import { ProfilesService } from '../profiles/profiles.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { RelationshipService } from '../relationships/relationship.service';
@@ -36,6 +38,7 @@ export class MessagingService {
     private readonly relationships: RelationshipService,
     private readonly profiles: ProfilesService,
     private readonly realtime: RealtimeService,
+    private readonly events: EventEmitter2,
   ) {
     this.cipher = new MessageCipher(
       config.getOrThrow<AppConfig['messaging']>('messaging').encryptionKey,
@@ -149,6 +152,12 @@ export class MessagingService {
     const view: MessageView = { ...this.toView(message), body };
     this.realtime.emitToUser(otherId, MessagingEvents.messageNew, view);
     this.realtime.emitToUser(viewerId, MessagingEvents.messageNew, view);
+    this.events.emit(DomainEvents.messageCreated, {
+      conversationId,
+      messageId: message.id,
+      senderId: viewerId,
+      recipientId: otherId,
+    } satisfies MessageCreatedEvent);
     return view;
   }
 
