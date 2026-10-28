@@ -12,6 +12,8 @@ import { FakeMailService } from './fake-mail.service';
 export interface TestApp {
   app: INestApplication;
   mail: FakeMailService;
+  /** Base URL when started with `listen: true` (WebSocket tests). */
+  url: string | null;
 }
 
 /**
@@ -19,7 +21,10 @@ export interface TestApp {
  * Only outgoing email is replaced, by an in-memory outbox.
  * `extraControllers` lets a suite mount test-only routes.
  */
-export async function createTestApp(extraControllers: Type<unknown>[] = []): Promise<TestApp> {
+export async function createTestApp(
+  extraControllers: Type<unknown>[] = [],
+  options: { listen?: boolean } = {},
+): Promise<TestApp> {
   const mail = new FakeMailService();
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
@@ -30,10 +35,16 @@ export async function createTestApp(extraControllers: Type<unknown>[] = []): Pro
     .compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();
   setupApp(app);
-  await app.init();
+  let url: string | null = null;
+  if (options.listen) {
+    await app.listen(0, '127.0.0.1');
+    url = (await app.getUrl()).replace('[::1]', '127.0.0.1');
+  } else {
+    await app.init();
+  }
   // Rate-limit counters must not leak between suites.
   await app.get<Redis>(REDIS_CLIENT).flushdb();
-  return { app, mail };
+  return { app, mail, url };
 }
 
 /** Empties every application table (keeps the migrations table). */
