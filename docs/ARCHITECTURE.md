@@ -61,9 +61,8 @@ test/                tests unitaires et de widgets
 | `saved_contacts` | id, owner_id FK, contact_id FK, note (≤ 500, privée), created_at | unique (owner_id, contact_id) |
 | `connections` | id, user_a_id, user_b_id (paire ordonnée a < b), requester_id, addressee_id, status (`pending`/`accepted`/`declined`), message (≤ 300), created_at, responded_at | unique (user_a_id, user_b_id) : une ligne par paire |
 | `blocks` | blocker_id FK, blocked_id FK, created_at | PK (blocker_id, blocked_id) |
-| `conversations` | id, user_a_id, user_b_id (a < b), last_message_at, created_at | unique (user_a_id, user_b_id) |
-| `conversation_members` | conversation_id, user_id, last_read_at | PK composite |
-| `messages` | id, conversation_id FK, sender_id FK, ciphertext bytea, iv bytea, auth_tag bytea, key_version, created_at | index (conversation_id, created_at desc) |
+| `conversations` | id, user_a_id, user_b_id (a < b), user_a_last_read_at, user_b_last_read_at, last_message_at, created_at | unique (user_a_id, user_b_id) ; 1-à-1 donc un marqueur de lecture par côté (pas de table `conversation_members`) |
+| `messages` | id, conversation_id FK, sender_id FK, ciphertext bytea, iv bytea (12 o), auth_tag bytea (16 o), key_version, created_at | index (conversation_id, created_at, id) ; AAD = `conversationId:senderId` |
 | `notifications` | id, user_id FK, type, data jsonb, read_at, created_at | index (user_id, created_at desc) |
 | `notification_preferences` | user_id, type, in_app, push | PK (user_id, type) |
 | `device_tokens` | id, user_id FK, token (unique), platform, created_at | |
@@ -84,14 +83,15 @@ test/                tests unitaires et de widgets
 | Relations | `POST /connections/:id/accept`, `/decline` | destinataire uniquement |
 | Relations | `DELETE /connections/:id` | l'une des deux parties |
 | Blocage | `POST /blocks`, `GET /blocks`, `DELETE /blocks/:userId` | soi-même |
-| Messagerie | `GET /conversations`, `POST /conversations` | membre ; création si connectés |
+| Messagerie | `GET /conversations`, `POST /conversations {userId}`, `GET /conversations/:id` | membre ; création si en relation |
 | Messagerie | `GET /conversations/:id/messages?before=&limit=`, `POST /conversations/:id/messages`, `POST /conversations/:id/read` | membre |
 | Notifications | `GET /notifications`, `POST /notifications/:id/read`, `POST /notifications/read-all` | propriétaire |
 | Notifications | `GET/PUT /notifications/preferences`, `POST /devices`, `DELETE /devices/:token` | soi-même |
 | Tableau de bord | `GET /dashboard` | soi-même |
 
 ## Socket.IO (`/ws`, auth : `auth.token` = access token)
-- Client → serveur : `message:send {conversationId, body}`, `conversation:read {conversationId}`.
+- Client → serveur : `message:send {conversationId, body}`, `conversation:read {conversationId}` ; réponse par acquittement `{ok, data}` ou `{ok: false, error, status}` (jamais d'exception). Envoi limité à 20 messages / 10 s / utilisateur.
+- Authentification au handshake (`auth.token`) ; un jeton expiré ferme le socket au prochain évènement, `logout-all` et le changement de mot de passe ferment tous les sockets de l'utilisateur.
 - Serveur → client : `message:new`, `conversation:read`, `notification:new`, `connection:update`.
 - Chaque socket rejoint la room `user:<id>` ; les émissions passent par l'adapter Redis.
 
@@ -109,7 +109,7 @@ test/                tests unitaires et de widgets
   - le demandeur annule (`DELETE`), le destinataire refuse (`decline`) ; l'un ou l'autre retire une relation acceptée.
 - Blocage : supprime relation et demandes, masque les deux membres l'un à l'autre (profil, photo, recherche, QR, contacts enregistrés, demandes). Le membre bloqué n'est pas prévenu et ne voit pas qui l'a bloqué.
 - Recherche : nom, prénom et titre pour tous ; poste et entreprise uniquement pour les profils publics (sinon on révélerait des champs masqués).
-- Messagerie : conversations 1-à-1 uniquement, réservées aux utilisateurs en relation acceptée.
+- Messagerie : conversations 1-à-1 uniquement, ouvertes et alimentées seulement entre relations acceptées. Si la relation est retirée, l'historique reste lisible mais l'envoi est bloqué (`canSend: false`) ; un blocage masque la conversation aux deux. L'app envoie en HTTP (refresh automatique du jeton) et reçoit en temps réel par WebSocket ; le serveur accepte aussi l'envoi par socket.
 - Reset mot de passe (validé) : **code à 6 chiffres** envoyé par email (Mailpit en local), valable 30 min, usage unique, 5 essais maximum, révoque toutes les sessions. `POST /auth/reset-password {email, code, newPassword}`.
 - Mot de passe : 8 à 128 caractères, au moins une lettre et un chiffre.
 - Hachage : argon2id via `@node-rs/argon2` (binaires précompilés ; le paquet `argon2` exige une compilation C++ sous Windows).

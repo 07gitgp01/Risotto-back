@@ -92,6 +92,25 @@ Préfixe `/api`. Toutes les routes exigent `Authorization: Bearer <accessToken>`
 | `POST /connections/:id/accept` · `/decline` | destinataire | répondre à une demande |
 | `DELETE /connections/:id` | l'une des parties | annuler ma demande ou retirer une relation |
 | `POST /blocks` · `GET /blocks` · `DELETE /blocks/:userId` | connecté | bloquer, lister, débloquer |
+| `GET /conversations` | connecté | mes conversations : interlocuteur, dernier message, non lus, accusé de lecture |
+| `POST /conversations` | connecté | `{userId}` : ouvre (ou retrouve) la conversation avec une relation |
+| `GET /conversations/:id` | membre | une conversation |
+| `GET /conversations/:id/messages?before=&limit=` | membre | historique, du plus récent au plus ancien, curseur `nextCursor` |
+| `POST /conversations/:id/messages` | membre en relation | `{body}` (1 à 4 000 caractères) |
+| `POST /conversations/:id/read` | membre | marque la conversation comme lue (accusé envoyé à l'autre) |
+
+### Temps réel (Socket.IO)
+
+Namespace `/ws` sur le même port que l'API (`http://localhost:3000/ws`), jeton d'accès dans `auth: { token }`.
+
+| Sens | Évènement | Contenu |
+|---|---|---|
+| serveur → client | `message:new` | message déchiffré `{id, conversationId, senderId, body, createdAt}` |
+| serveur → client | `conversation:read` | `{conversationId, userId, readAt}` |
+| client → serveur | `message:send` | `{conversationId, body}` → acquittement `{ok, data}` |
+| client → serveur | `conversation:read` | `{conversationId}` → acquittement |
+
+Les évènements passent par l'adapter Redis : plusieurs instances de l'API peuvent tourner derrière un répartiteur.
 
 Les routes `/auth/*` ont une limitation de débit renforcée (`THROTTLE_AUTH_LIMIT` par minute et par IP).
 

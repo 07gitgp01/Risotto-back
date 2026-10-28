@@ -55,6 +55,9 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - Visibilité : toute règle d'accès passe par `RelationshipService.resolve(viewer, owner)` (`self`/`connected`/`stranger`/`blocked`) puis `profileAccess()`. Ne pas dupliquer la logique ailleurs.
 - DTO : `@OptionalNotNull()` pour un champ facultatif qui ne doit jamais valoir null (sinon `@IsOptional` laisse passer null → 500).
 - QR : `risotto://u/<token>` (`parseQrPayload`). La carte de contact (`toContactCard`) ignore la visibilité mais respecte share_email/share_phone.
+- Temps réel : `RealtimeService.emitToUser(userId, event, payload)` (module global) ; ne pas émettre directement depuis un gateway. Auth des sockets par middleware de namespace (`RealtimeGateway`). Les handlers WS renvoient un acquittement `{ok, ...}`, jamais d'exception.
+- Messages : chiffrés par `MessageCipher` (AES-256-GCM, AAD `conversationId:senderId`) ; ne jamais logger un corps de message.
+- `socket.io` doit avoir la même version que celle de `@nestjs/platform-socket.io` (sinon conflit de types) : `npm ls socket.io`.
 - Test anti-dérive : `app.e2e-spec.ts` échoue si les entités et les migrations divergent.
 
 ## Jalons
@@ -63,7 +66,7 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - [x] 3. Profil (création, édition, photo, visibilité)
 - [x] 4. Contacts et partage (carte de contact, QR code personnel, scan)
 - [x] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
-- [ ] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)
+- [x] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)
 - [ ] 7. Notifications (temps réel, push FCM, préférences)
 - [ ] 8. Tableau de bord (demandes en attente, non lus, activité récente)
 - [ ] 9. Finalisation (revue sécurité, performances, accessibilité, hors ligne)
