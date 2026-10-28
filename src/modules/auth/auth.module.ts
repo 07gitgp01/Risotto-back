@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppConfig } from '../../config/configuration';
 import { MailModule } from '../mail/mail.module';
+import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -17,7 +18,7 @@ import { TokensService } from './tokens.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RefreshToken, PasswordResetCode]),
+    TypeOrmModule.forFeature([RefreshToken, PasswordResetCode, User]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {

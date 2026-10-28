@@ -18,6 +18,10 @@ export class User {
   @Column({ name: 'password_hash', type: 'text', select: false })
   passwordHash: string;
 
+  /** Access tokens issued up to this instant are refused (logout everywhere, new password). */
+  @Column({ name: 'tokens_valid_after', type: 'timestamptz', nullable: true, select: false })
+  tokensValidAfter: Date | null;
+
   /** Random, rotatable token encoded in the personal QR code (never the user id). */
   @Column({ name: 'qr_token', type: 'varchar', length: 64, nullable: true, unique: true })
   qrToken: string | null;

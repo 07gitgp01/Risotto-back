@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthenticatedRequest, IS_PUBLIC_KEY } from '../../common/auth/auth.decorators';
-import { TokensService } from './tokens.service';
+import { AccessTokenPayload, TokensService } from './tokens.service';
 
 /** Global guard: every route requires a valid access token unless marked @Public(). */
 @Injectable()
@@ -11,7 +11,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly tokens: TokensService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -26,12 +26,16 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
+    let payload: AccessTokenPayload;
     try {
-      const payload = this.tokens.verifyAccessToken(token);
-      request.user = { id: payload.sub };
-      return true;
+      payload = this.tokens.verifyAccessToken(token);
     } catch {
       throw new UnauthorizedException();
     }
+    if (!payload.sid || (await this.tokens.isAccessTokenRevoked(payload))) {
+      throw new UnauthorizedException();
+    }
+    request.user = { id: payload.sub };
+    return true;
   }
 }

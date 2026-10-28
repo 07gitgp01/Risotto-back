@@ -23,6 +23,8 @@ export interface AppConfig {
     tokenHashSecret: string;
     passwordResetTtlMinutes: number;
     passwordResetMaxAttempts: number;
+    loginMaxFailures: number;
+    loginLockMinutes: number;
   };
   mail: {
     host: string;
@@ -79,6 +81,8 @@ export default (): AppConfig => ({
     tokenHashSecret: process.env.TOKEN_HASH_SECRET ?? '',
     passwordResetTtlMinutes: Number(process.env.PASSWORD_RESET_TTL_MINUTES ?? 30),
     passwordResetMaxAttempts: Number(process.env.PASSWORD_RESET_MAX_ATTEMPTS ?? 5),
+    loginMaxFailures: Number(process.env.LOGIN_MAX_FAILURES ?? 10),
+    loginLockMinutes: Number(process.env.LOGIN_LOCK_MINUTES ?? 15),
   },
   mail: {
     host: process.env.SMTP_HOST ?? 'localhost',

@@ -1,17 +1,29 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
+import Redis from 'ioredis';
 import { IsNull, Repository } from 'typeorm';
 import { randomToken, sha256 } from '../../common/crypto/hashing';
+import { REDIS_CLIENT } from '../../common/redis/redis.constants';
 import { AppConfig } from '../../config/configuration';
+import { User } from '../users/user.entity';
 import { AuthTokens } from './dto/auth.dto';
 import { RefreshToken } from './entities/refresh-token.entity';
 
 export interface AccessTokenPayload {
   sub: string;
+  /** Session (refresh token family): lets a logout revoke this session's access tokens. */
+  sid: string;
+  /** Issue time in milliseconds (`iat` is in seconds, too coarse for revocations). */
+  iatMs: number;
+  iat?: number;
+  exp?: number;
 }
+
+const revokedSessionKey = (sid: string) => `auth:revoked-sid:${sid}`;
+const validAfterKey = (userId: string) => `auth:valid-after:${userId}`;
 
 const INVALID_REFRESH_TOKEN = 'Invalid refresh token';
 
@@ -24,6 +36,8 @@ export class TokensService {
     private readonly jwt: JwtService,
     config: ConfigService,
     @InjectRepository(RefreshToken) private readonly refreshTokens: Repository<RefreshToken>,
+    @InjectRepository(User) private readonly users: Repository<User>,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {
     this.authConfig = config.getOrThrow<AppConfig['auth']>('auth');
   }
@@ -70,8 +84,51 @@ export class TokensService {
     }
   }
 
+  /** Every session of the user, refresh and access tokens alike. */
   async revokeAllForUser(userId: string): Promise<void> {
     await this.refreshTokens.update({ userId, revokedAt: IsNull() }, { revokedAt: new Date() });
+    await this.revokeAccessTokensIssuedBefore(userId, new Date());
+  }
+
+  /** Refuses access tokens issued before `instant` (logout everywhere, password change). */
+  async revokeAccessTokensIssuedBefore(userId: string, instant: Date): Promise<void> {
+    await this.users.update({ id: userId }, { tokensValidAfter: instant });
+    await this.redis.set(
+      validAfterKey(userId),
+      String(instant.getTime()),
+      'EX',
+      this.authConfig.jwtAccessTtlSeconds,
+    );
+  }
+
+  /**
+   * Access tokens are short-lived but still checked against revocations, so a logout,
+   * a password change or a stolen refresh token takes effect at once. Redis caches
+   * the per-user marker; the database stays the source of truth.
+   */
+  async isAccessTokenRevoked(payload: AccessTokenPayload): Promise<boolean> {
+    if (await this.redis.exists(revokedSessionKey(payload.sid))) {
+      return true;
+    }
+    let validAfter = await this.redis.get(validAfterKey(payload.sub));
+    if (validAfter === null) {
+      const user = await this.users
+        .createQueryBuilder('user')
+        .addSelect('user.tokensValidAfter')
+        .where('user.id = :id', { id: payload.sub })
+        .getOne();
+      if (!user) {
+        return true;
+      }
+      validAfter = String(user.tokensValidAfter?.getTime() ?? 0);
+      await this.redis.set(
+        validAfterKey(payload.sub),
+        validAfter,
+        'EX',
+        this.authConfig.jwtAccessTtlSeconds,
+      );
+    }
+    return (payload.iatMs ?? 0) <= Number(validAfter);
   }
 
   verifyAccessToken(token: string): AccessTokenPayload {
@@ -80,6 +137,13 @@ export class TokensService {
 
   private async revokeFamily(familyId: string): Promise<void> {
     await this.refreshTokens.update({ familyId, revokedAt: IsNull() }, { revokedAt: new Date() });
+    // Access tokens of the session live at most this long: the marker can expire with them.
+    await this.redis.set(
+      revokedSessionKey(familyId),
+      '1',
+      'EX',
+      this.authConfig.jwtAccessTtlSeconds,
+    );
   }
 
   private async issue(userId: string, familyId: string, userAgent?: string): Promise<AuthTokens> {
@@ -94,7 +158,7 @@ export class TokensService {
       userAgent: userAgent?.slice(0, 255) ?? null,
     });
 
-    const payload: AccessTokenPayload = { sub: userId };
+    const payload: AccessTokenPayload = { sub: userId, sid: familyId, iatMs: Date.now() };
     return {
       accessToken: await this.jwt.signAsync(payload),
       refreshToken,

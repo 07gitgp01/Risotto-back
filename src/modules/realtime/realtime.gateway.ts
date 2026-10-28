@@ -34,15 +34,20 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       if (typeof token !== 'string' || token.length === 0) {
         return next(new Error('unauthorized'));
       }
-      try {
-        const payload = this.tokens.verifyAccessToken(token) as { sub: string; exp?: number };
-        const data = socket.data as SocketData;
-        data.userId = payload.sub;
-        data.tokenExpiresAt = payload.exp ?? 0;
-        next();
-      } catch {
-        next(new Error('unauthorized'));
-      }
+      void (async () => {
+        try {
+          const payload = this.tokens.verifyAccessToken(token);
+          if (!payload.sid || (await this.tokens.isAccessTokenRevoked(payload))) {
+            return next(new Error('unauthorized'));
+          }
+          const data = socket.data as SocketData;
+          data.userId = payload.sub;
+          data.tokenExpiresAt = payload.exp ?? 0;
+          next();
+        } catch {
+          next(new Error('unauthorized'));
+        }
+      })();
     });
   }
 

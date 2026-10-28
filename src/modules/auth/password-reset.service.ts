@@ -12,6 +12,7 @@ import { ResetPasswordDto } from './dto/auth.dto';
 import { PasswordResetCode } from './entities/password-reset-code.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { PasswordHasher } from './password-hasher.service';
+import { TokensService } from './tokens.service';
 
 const INVALID_CODE = 'Invalid or expired code';
 
@@ -28,6 +29,7 @@ export class PasswordResetService {
     private readonly hasher: PasswordHasher,
     private readonly mail: MailService,
     private readonly realtime: RealtimeService,
+    private readonly tokens: TokensService,
   ) {
     this.authConfig = config.getOrThrow<AppConfig['auth']>('auth');
   }
@@ -95,6 +97,7 @@ export class PasswordResetService {
         { revokedAt: new Date() },
       );
     });
+    await this.tokens.revokeAccessTokensIssuedBefore(user.id, new Date());
     this.realtime.disconnectUser(user.id);
   }
 

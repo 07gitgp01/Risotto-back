@@ -35,6 +35,8 @@ export const envValidationSchema = Joi.object<Record<string, unknown>>({
   TOKEN_HASH_SECRET: Joi.string().min(32).required(),
   PASSWORD_RESET_TTL_MINUTES: Joi.number().integer().positive().default(30),
   PASSWORD_RESET_MAX_ATTEMPTS: Joi.number().integer().positive().default(5),
+  LOGIN_MAX_FAILURES: Joi.number().integer().positive().default(10),
+  LOGIN_LOCK_MINUTES: Joi.number().integer().positive().default(15),
 
   SMTP_HOST: Joi.string().required(),
   SMTP_PORT: Joi.number().port().default(1025),
