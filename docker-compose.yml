@@ -50,6 +50,8 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       REDIS_URL: redis://redis:6379/0
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
     ports:
       # 0.0.0.0 so the Android emulator (10.0.2.2) and a physical device on the LAN can reach it.
       - '${PORT:-3000}:3000'
@@ -58,6 +60,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
 
 volumes:
   postgres-data:

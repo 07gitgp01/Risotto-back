@@ -54,9 +54,9 @@ test/                tests unitaires et de widgets
 ## Schéma de base de données
 | Table | Colonnes principales | Contraintes |
 |---|---|---|
-| `users` | id uuid PK, email (unique, minuscules), password_hash, qr_token (unique), created_at, updated_at | |
+| `users` | id uuid PK, email citext (unique, minuscules), password_hash (argon2id), qr_token (unique, jalon 4), created_at, updated_at | |
 | `refresh_tokens` | id, user_id FK, family_id, token_hash (unique), expires_at, used_at, revoked_at, created_at, user_agent | index (user_id), (family_id) |
-| `password_reset_tokens` | id, user_id FK, token_hash (unique), expires_at, used_at | TTL 30 min |
+| `password_reset_codes` | id, user_id FK, code_hash (HMAC-SHA256), expires_at, used_at, failed_attempts, created_at | TTL 30 min, 5 essais, seul le dernier code est valide |
 | `profiles` | user_id PK/FK, first_name, last_name, headline, job_title, company, bio, location, phone, website, photo_key, visibility (`public`/`connections`/`private`), share_email, share_phone, updated_at | |
 | `saved_contacts` | id, owner_id FK, contact_id FK, note, created_at | unique (owner_id, contact_id) |
 | `connections` | id, requester_id FK, addressee_id FK, status (`pending`/`accepted`/`declined`), created_at, responded_at | unique paire non orientée (least, greatest) |
@@ -100,5 +100,7 @@ test/                tests unitaires et de widgets
 - QR code : contient `risotto://u/<qr_token>` (jeton aléatoire révocable, pas l'id utilisateur).
 - Carte de contact : email/téléphone inclus uniquement si `share_email` / `share_phone` activés.
 - Messagerie : conversations 1-à-1 uniquement, réservées aux utilisateurs en relation acceptée.
-- Reset mot de passe : lien/jeton envoyé par email (Mailpit en local), valable 30 min, usage unique, révoque toutes les sessions.
+- Reset mot de passe (validé) : **code à 6 chiffres** envoyé par email (Mailpit en local), valable 30 min, usage unique, 5 essais maximum, révoque toutes les sessions. `POST /auth/reset-password {email, code, newPassword}`.
+- Mot de passe : 8 à 128 caractères, au moins une lettre et un chiffre.
+- Hachage : argon2id via `@node-rs/argon2` (binaires précompilés ; le paquet `argon2` exige une compilation C++ sous Windows).
 - Photos : JPEG/PNG/WebP ≤ 5 Mo, vérification des magic bytes, stockage disque local.

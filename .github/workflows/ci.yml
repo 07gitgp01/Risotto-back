@@ -46,6 +46,10 @@ jobs:
       DB_NAME: risotto_test
       DB_TEST_NAME: risotto_test
       REDIS_URL: redis://localhost:6379/0
+      # Throwaway values, only valid inside this CI job.
+      JWT_ACCESS_SECRET: ci-only-jwt-secret-not-used-anywhere-else-0123456789
+      TOKEN_HASH_SECRET: ci-only-hash-secret-not-used-anywhere-else-0123456789
+      SMTP_HOST: localhost
 
     steps:
       - uses: actions/checkout@v4

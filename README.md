@@ -56,13 +56,33 @@ npm run migration:run
 npm run migration:revert
 ```
 
+## API
+
+Préfixe `/api`. Toutes les routes exigent `Authorization: Bearer <accessToken>`, sauf mention « public ».
+
+| Méthode et chemin | Accès | Rôle |
+|---|---|---|
+| `GET /health` | public | état de l'API, de PostgreSQL et de Redis |
+| `POST /auth/register` | public | `{email, password}` → session (`accessToken`, `refreshToken`, `user`) |
+| `POST /auth/login` | public | `{email, password}` → session ; 401 identique si l'email est inconnu |
+| `POST /auth/refresh` | public | `{refreshToken}` → nouvelle paire ; l'ancien jeton devient inutilisable |
+| `POST /auth/logout` | connecté | `{refreshToken}` → ferme cette session (204) |
+| `POST /auth/logout-all` | connecté | ferme toutes les sessions de l'utilisateur (204) |
+| `POST /auth/forgot-password` | public | `{email}` → 204 toujours ; envoie un code à 6 chiffres si le compte existe |
+| `POST /auth/reset-password` | public | `{email, code, newPassword}` → 204 ; ferme toutes les sessions |
+| `GET /users/me` | connecté | utilisateur courant |
+
+Les routes `/auth/*` ont une limitation de débit renforcée (`THROTTLE_AUTH_LIMIT` par minute et par IP).
+
 ## Configuration
 
 Toutes les variables sont documentées dans [.env.example](.env.example) et validées au démarrage : l'API refuse de démarrer si une variable est absente ou invalide. Le fichier `.env` n'est jamais commité.
 
 ## Sécurité
 
-- Mots de passe hachés en argon2id ; access token JWT de 15 min et refresh token à rotation avec détection de réutilisation.
+- Mots de passe hachés en argon2id ; access token JWT (HS256) de 15 min et refresh token opaque à rotation. Seule l'empreinte SHA-256 du refresh token est stockée. Réutiliser un refresh token déjà consommé révoque toute la session (détection de vol).
+- Codes de réinitialisation stockés sous forme d'HMAC (clé `TOKEN_HASH_SECRET`), valables 30 min, 5 essais maximum.
+- Un access token reste valable jusqu'à son expiration (15 min max) après une déconnexion ou un changement de mot de passe : seuls les refresh tokens sont révoqués.
 - Validation stricte des entrées (class-validator, propriétés inconnues refusées), helmet, CORS restreint à `CORS_ORIGINS`, limitation de débit stockée dans Redis.
 - Les erreurs renvoyées ne contiennent jamais de stack trace ni de message interne.
 
