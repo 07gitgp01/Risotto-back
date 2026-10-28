@@ -34,15 +34,19 @@ Langue des échanges : français. Code, commits, noms techniques : anglais.
 
 ## Commandes locales
 ```bash
-cp .env.example .env              # puis renseigner les secrets (voir README)
-docker compose up -d postgres redis mailpit
 npm ci
+npm run env:init                  # crée .env avec des secrets générés (n'écrase jamais)
+docker compose up -d postgres redis mailpit
 npm run migration:run
 npm run start:dev                 # API sur http://localhost:3000/api
 npm run lint && npm test && npm run test:e2e && npm run build
-docker compose up -d --build      # tout en conteneurs (API incluse)
+docker compose up -d --build      # tout en conteneurs (API incluse, migrations au démarrage)
 npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migration
 ```
+- PostgreSQL est exposé sur le port hôte **5433** (un PostgreSQL local occupe 5432).
+- `tsconfig` en `isolatedModules` : ts-jest transpile sans vérifier les types (sinon les tests sont très lents) ; le typage est vérifié par `npm run build` et `npm run lint`.
+- Globs TypeORM : toujours avec des `/` (Windows), voir `src/database/typeorm-options.ts`.
+- Les e2e utilisent `createTestApp()` (`test/utils`) : même pile HTTP que `main.ts` via `setupApp()`.
 
 ## Jalons
 - [ ] 1. Fondations (structure, Docker Compose, CI, config env)
