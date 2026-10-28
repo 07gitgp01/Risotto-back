@@ -13,7 +13,9 @@ import { validateEnv } from './config/env.validation';
 import { buildDataSourceOptions } from './database/typeorm-options';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { ConnectionsModule } from './modules/connections/connections.module';
 import { MailModule } from './modules/mail/mail.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 import { UsersModule } from './modules/users/users.module';
 
 const reflector = new Reflector();
@@ -60,6 +62,8 @@ const reflector = new Reflector();
     MailModule,
     UsersModule,
     AuthModule,
+    ConnectionsModule,
+    ProfilesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
