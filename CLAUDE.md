@@ -49,7 +49,7 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - Les e2e utilisent `createTestApp()` (`test/utils`) : même pile HTTP que `main.ts` via `setupApp()`.
 
 ## Jalons
-- [ ] 1. Fondations (structure, Docker Compose, CI, config env)
+- [x] 1. Fondations (structure, Docker Compose, CI, config env)
 - [ ] 2. Authentification (inscription, connexion, refresh, déconnexion, reset mot de passe)
 - [ ] 3. Profil (création, édition, photo, visibilité)
 - [ ] 4. Contacts et partage (carte de contact, QR code personnel, scan)
