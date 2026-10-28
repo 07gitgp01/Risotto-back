@@ -17,6 +17,7 @@ import { HealthModule } from './modules/health/health.module';
 import { RelationshipsModule } from './modules/relationships/relationships.module';
 import { ConnectionsModule } from './modules/connections/connections.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { MailModule } from './modules/mail/mail.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -76,6 +77,7 @@ const reflector = new Reflector();
     RealtimeModule,
     MessagingModule,
     NotificationsModule,
+    DashboardModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

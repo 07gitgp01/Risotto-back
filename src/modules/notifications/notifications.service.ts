@@ -143,8 +143,19 @@ export class NotificationsService {
     };
   }
 
-  unreadCount(userId: string): Promise<number> {
-    return this.notifications.countBy({ userId, readAt: IsNull() });
+  /** Unread notifications, not counting those from members blocked since. */
+  async unreadCount(userId: string): Promise<number> {
+    const [{ count }] = await this.notifications.query<{ count: string }[]>(
+      `SELECT count(*) FROM notifications n
+       WHERE n.user_id = $1 AND n.read_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id::text = n.data->>'actorId')
+              OR (b.blocked_id = $1 AND b.blocker_id::text = n.data->>'actorId')
+         )`,
+      [userId],
+    );
+    return Number(count);
   }
 
   async markRead(userId: string, id: string): Promise<void> {

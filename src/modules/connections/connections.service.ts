@@ -103,6 +103,18 @@ export class ConnectionsService {
     await this.connections.delete({ id: connection.id });
   }
 
+  async counts(viewerId: string): Promise<{ connections: number; pendingIncoming: number }> {
+    const [connections, pendingIncoming] = await Promise.all([
+      this.connections
+        .createQueryBuilder('c')
+        .where('(c.user_a_id = :viewerId OR c.user_b_id = :viewerId)', { viewerId })
+        .andWhere(`c.status = 'accepted'`)
+        .getCount(),
+      this.connections.countBy({ addresseeId: viewerId, status: 'pending' }),
+    ]);
+    return { connections, pendingIncoming };
+  }
+
   async listConnections(viewerId: string, page: PaginationQuery): Promise<ConnectionView[]> {
     const rows = await this.connections
       .createQueryBuilder('c')
