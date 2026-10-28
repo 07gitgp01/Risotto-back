@@ -1,4 +1,6 @@
 import { existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 /**
  * Points the app at the dedicated test database and Redis db 1, so e2e runs never touch dev data.
@@ -13,6 +15,7 @@ export function applyTestEnv(): void {
   // Suites share one client IP: rate limits are lifted, the rate-limit suite lowers them.
   process.env.THROTTLE_LIMIT = '10000';
   process.env.THROTTLE_AUTH_LIMIT = '10000';
+  process.env.UPLOAD_DIR = join(tmpdir(), 'risotto-e2e-uploads');
 
   const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
   redisUrl.pathname = '/1';
