@@ -41,6 +41,7 @@ npm run env:init                  # crée .env avec des secrets générés (n'é
 docker compose up -d postgres redis mailpit
 npm run migration:run
 npm run start:dev                 # API sur http://localhost:3000/api
+npm run seed                      # comptes de démo (alice@risotto.dev … / Risotto2026)
 npm run lint && npm test && npm run test:e2e && npm run build
 docker compose up -d --build      # tout en conteneurs (API incluse, migrations au démarrage)
 npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migration

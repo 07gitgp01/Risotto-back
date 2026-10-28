@@ -20,6 +20,24 @@ npm run migration:run
 npm run start:dev                         # http://localhost:3000/api/health
 ```
 
+### Données de démonstration
+
+```bash
+npm run seed        # l'API doit tourner ; relançable sans doublons
+```
+
+Crée 5 comptes (mot de passe commun : `Risotto2026`) :
+
+| Compte | Profil | Situation vue par Alice |
+|---|---|---|
+| `alice@risotto.dev` | public, email et téléphone partagés | compte principal à utiliser |
+| `bob@risotto.dev` | public | relation, conversation avec 2 messages non lus |
+| `carol@risotto.dev` | visibilité « relations » | demande de mise en relation reçue |
+| `david@risotto.dev` | public | demande envoyée par Alice, carte enregistrée dans ses contacts |
+| `emma@risotto.dev` | privé | relation (ajoutée par QR code) |
+
+Les comptes de démonstration n'existent qu'en local : ne jamais lancer ce script sur un serveur réel.
+
 Ou tout en conteneurs, API comprise (les migrations s'appliquent au démarrage) :
 
 ```bash
