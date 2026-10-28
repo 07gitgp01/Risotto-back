@@ -99,6 +99,11 @@ Préfixe `/api`. Toutes les routes exigent `Authorization: Bearer <accessToken>`
 | `POST /conversations/:id/messages` | membre en relation | `{body}` (1 à 4 000 caractères) |
 | `POST /conversations/:id/read` | membre | marque la conversation comme lue (accusé envoyé à l'autre) |
 
+| `GET /notifications?before=&limit=` | connecté | notifications in-app (+ `unreadCount`) |
+| `POST /notifications/:id/read` · `POST /notifications/read-all` | propriétaire | marquer comme lu |
+| `GET /notifications/preferences` · `PUT /notifications/preferences` | connecté | `{preferences: [{type, inApp?, push?}]}` |
+| `POST /devices` · `DELETE /devices` | connecté | `{token, platform}` / `{token}` : jeton FCM de l'appareil |
+
 ### Temps réel (Socket.IO)
 
 Namespace `/ws` sur le même port que l'API (`http://localhost:3000/ws`), jeton d'accès dans `auth: { token }`.
@@ -107,12 +112,21 @@ Namespace `/ws` sur le même port que l'API (`http://localhost:3000/ws`), jeton 
 |---|---|---|
 | serveur → client | `message:new` | message déchiffré `{id, conversationId, senderId, body, createdAt}` |
 | serveur → client | `conversation:read` | `{conversationId, userId, readAt}` |
+| serveur → client | `notification:new` | notification in-app `{id, type, actor, data, readAt, createdAt}` |
 | client → serveur | `message:send` | `{conversationId, body}` → acquittement `{ok, data}` |
 | client → serveur | `conversation:read` | `{conversationId}` → acquittement |
 
 Les évènements passent par l'adapter Redis : plusieurs instances de l'API peuvent tourner derrière un répartiteur.
 
 Les routes `/auth/*` ont une limitation de débit renforcée (`THROTTLE_AUTH_LIMIT` par minute et par IP).
+
+## Notifications push (FCM)
+
+Désactivées par défaut. Pour les activer :
+
+1. Créer un projet Firebase, y ajouter une app Android (`com.risotto.risotto`) et une app iOS (même identifiant).
+2. Télécharger une clé de compte de service (Paramètres > Comptes de service), la placer hors du dépôt et renseigner `FCM_SERVICE_ACCOUNT_PATH` dans `.env` (en Docker, monter le fichier dans le conteneur).
+3. Côté app, voir le README de `risotto-front`.
 
 ## Configuration
 

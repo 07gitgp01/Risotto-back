@@ -63,9 +63,9 @@ test/                tests unitaires et de widgets
 | `blocks` | blocker_id FK, blocked_id FK, created_at | PK (blocker_id, blocked_id) |
 | `conversations` | id, user_a_id, user_b_id (a < b), user_a_last_read_at, user_b_last_read_at, last_message_at, created_at | unique (user_a_id, user_b_id) ; 1-à-1 donc un marqueur de lecture par côté (pas de table `conversation_members`) |
 | `messages` | id, conversation_id FK, sender_id FK, ciphertext bytea, iv bytea (12 o), auth_tag bytea (16 o), key_version, created_at | index (conversation_id, created_at, id) ; AAD = `conversationId:senderId` |
-| `notifications` | id, user_id FK, type, data jsonb, read_at, created_at | index (user_id, created_at desc) |
-| `notification_preferences` | user_id, type, in_app, push | PK (user_id, type) |
-| `device_tokens` | id, user_id FK, token (unique), platform, created_at | |
+| `notifications` | id, user_id FK, type, data jsonb (ids seulement : actorId, connectionId…), read_at, created_at | index (user_id, created_at) ; les noms sont résolus à la lecture |
+| `notification_preferences` | user_id, type, in_app, push | PK (user_id, type) ; ligne créée seulement quand l'utilisateur change un défaut |
+| `device_tokens` | id, user_id FK, token (unique), platform (`android`/`ios`), created_at, last_seen_at | un jeton appartient au dernier utilisateur connecté sur l'appareil |
 
 ## Endpoints REST (préfixe `/api`, JWT requis sauf mention)
 | Domaine | Méthode et chemin | Règle d'accès |
@@ -86,7 +86,7 @@ test/                tests unitaires et de widgets
 | Messagerie | `GET /conversations`, `POST /conversations {userId}`, `GET /conversations/:id` | membre ; création si en relation |
 | Messagerie | `GET /conversations/:id/messages?before=&limit=`, `POST /conversations/:id/messages`, `POST /conversations/:id/read` | membre |
 | Notifications | `GET /notifications`, `POST /notifications/:id/read`, `POST /notifications/read-all` | propriétaire |
-| Notifications | `GET/PUT /notifications/preferences`, `POST /devices`, `DELETE /devices/:token` | soi-même |
+| Notifications | `GET/PUT /notifications/preferences`, `POST /devices`, `DELETE /devices {token}` (jeton dans le corps : trop long pour une URL) | soi-même |
 | Tableau de bord | `GET /dashboard` | soi-même |
 
 ## Socket.IO (`/ws`, auth : `auth.token` = access token)
@@ -113,6 +113,12 @@ test/                tests unitaires et de widgets
 - Reset mot de passe (validé) : **code à 6 chiffres** envoyé par email (Mailpit en local), valable 30 min, usage unique, 5 essais maximum, révoque toutes les sessions. `POST /auth/reset-password {email, code, newPassword}`.
 - Mot de passe : 8 à 128 caractères, au moins une lettre et un chiffre.
 - Hachage : argon2id via `@node-rs/argon2` (binaires précompilés ; le paquet `argon2` exige une compilation C++ sous Windows).
+- Notifications :
+  - types : `connection_request`, `connection_accepted` (liste in-app + push), `message` (push uniquement : les messages ont déjà leurs badges de non-lus) ;
+  - déclenchées par des évènements de domaine (`@nestjs/event-emitter`), traitées en asynchrone : un échec de notification ne casse jamais l'action d'origine ;
+  - le push d'un message affiche le nom de l'expéditeur et « Nouveau message », **jamais le contenu** (écran verrouillé) ;
+  - FCM via `firebase-admin`, activé seulement si `FCM_SERVICE_ACCOUNT_PATH` pointe vers un fichier ; les jetons refusés par FCM sont supprimés ;
+  - côté app, le push n'est actif qu'avec `--dart-define=FCM_ENABLED=true` et les fichiers Firebase (non commités).
 - Photos : JPEG/PNG/WebP ≤ 5 Mo ; le format est détecté par décodage (sharp), puis l'image est réencodée en WebP 512 px max, sans métadonnées (EXIF/GPS supprimés). Stockage disque local (`UPLOAD_DIR/photos`), nom aléatoire, servie via `GET /profiles/:userId/photo` (authentifié, même règle de visibilité que le profil).
 - Profil : créé après l'inscription via un écran d'onboarding (prénom + nom obligatoires). Visibilité par défaut `connections`, email et téléphone non partagés par défaut (confidentialité par défaut).
 - Niveaux d'accès d'un profil : `full` (soi, relations, ou profil public), `preview` (nom, titre, photo : profil `connections` vu par un non-relation), `minimal` (nom seul : profil `private`), 404 si blocage.

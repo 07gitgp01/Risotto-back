@@ -58,6 +58,7 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - Temps réel : `RealtimeService.emitToUser(userId, event, payload)` (module global) ; ne pas émettre directement depuis un gateway. Auth des sockets par middleware de namespace (`RealtimeGateway`). Les handlers WS renvoient un acquittement `{ok, ...}`, jamais d'exception.
 - Messages : chiffrés par `MessageCipher` (AES-256-GCM, AAD `conversationId:senderId`) ; ne jamais logger un corps de message.
 - `socket.io` doit avoir la même version que celle de `@nestjs/platform-socket.io` (sinon conflit de types) : `npm ls socket.io`.
+- Notifications : les modules métier émettent des évènements (`DomainEvents`) via `EventEmitter2` ; seul `NotificationsService` crée notifications et pushs (handlers `async`, erreurs absorbées). En test, `createTestApp()` remplace FCM par `FakePushSender` (`push.sent`) ; `eventually()` attend les handlers asynchrones.
 - Test anti-dérive : `app.e2e-spec.ts` échoue si les entités et les migrations divergent.
 
 ## Jalons
@@ -67,6 +68,6 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - [x] 4. Contacts et partage (carte de contact, QR code personnel, scan)
 - [x] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
 - [x] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)
-- [ ] 7. Notifications (temps réel, push FCM, préférences)
+- [x] 7. Notifications (temps réel, push FCM, préférences)
 - [ ] 8. Tableau de bord (demandes en attente, non lus, activité récente)
 - [ ] 9. Finalisation (revue sécurité, performances, accessibilité, hors ligne)
