@@ -14,6 +14,7 @@ import { buildDataSourceOptions } from './database/typeorm-options';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { ConnectionsModule } from './modules/connections/connections.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
 import { MailModule } from './modules/mail/mail.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { UsersModule } from './modules/users/users.module';
@@ -64,6 +65,7 @@ const reflector = new Reflector();
     AuthModule,
     ConnectionsModule,
     ProfilesModule,
+    ContactsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -82,17 +82,19 @@ export class ProfilesService {
     }
   }
 
-  /** The photo is visible from the `preview` level up. */
+  /** The photo is visible from the `preview` level up, or on a saved contact card. */
   async getPhoto(viewerId: string, ownerId: string): Promise<Buffer> {
     const profile = await this.profiles.findOneBy({ userId: ownerId });
     if (!profile?.photoKey) {
       throw new NotFoundException('Photo not found');
     }
-    const access = profileAccess(
-      profile.visibility,
-      await this.relationships.resolve(viewerId, ownerId),
-    );
-    if (access !== 'full' && access !== 'preview') {
+    const relationship = await this.relationships.resolve(viewerId, ownerId);
+    const access = profileAccess(profile.visibility, relationship);
+    const visible =
+      access === 'full' ||
+      access === 'preview' ||
+      (relationship !== 'blocked' && (await this.relationships.hasSavedCard(viewerId, ownerId)));
+    if (!visible) {
       throw new NotFoundException('Photo not found');
     }
     return this.photos.read(profile.photoKey);
