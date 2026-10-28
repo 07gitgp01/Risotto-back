@@ -14,14 +14,16 @@ Langue des échanges : français. Code, commits, noms techniques : anglais.
 - Architecture : un module Nest par domaine dans `src/modules/*`, code transverse dans `src/common`, config typée dans `src/config`.
 
 ## Sécurité (non négociable)
-- Mots de passe : argon2id. Jamais loggés, jamais renvoyés.
+- Mots de passe : argon2id via `@node-rs/argon2` (le paquet `argon2` ne compile pas sous Windows sans Visual Studio). Jamais loggés, jamais renvoyés (`select: false` sur `password_hash`). Politique : 8 à 128 caractères, au moins une lettre et un chiffre.
 - Access token JWT 15 min (`JWT_ACCESS_SECRET`), refresh token opaque à **rotation** stocké hashé (SHA-256) par famille ; réutilisation d'un refresh déjà utilisé ⇒ révocation de toute la famille.
 - `ValidationPipe` global : `whitelist`, `forbidNonWhitelisted`, `transform`. Tout DTO est validé par class-validator.
 - helmet, CORS restreint à `CORS_ORIGINS`, rate limiting global + renforcé sur `/auth/*`.
 - Contrôle d'accès sur **chaque** ressource : l'utilisateur courant vient du JWT, jamais du body. Un utilisateur bloqué ne voit rien de celui qui l'a bloqué.
 - Messages chiffrés au repos en AES-256-GCM (`MESSAGE_ENCRYPTION_KEY`, 32 octets base64). Ce n'est **pas** du bout en bout : le serveur peut déchiffrer.
 - Aucun secret dans Git : `.env` ignoré, `.env.example` documenté. Réponses d'erreur sans stack trace.
-- Réponses anti-énumération : `forgot-password` répond toujours 204.
+- Réponses anti-énumération : `forgot-password` répond toujours 204 (email envoyé en arrière-plan) ; `login` renvoie le même 401 et vérifie un hash factice si l'email est inconnu.
+- Reset mot de passe : code à 6 chiffres, HMAC-SHA256 (`TOKEN_HASH_SECRET`), 30 min, 5 essais (incrément atomique), seul le dernier code est valide, succès ⇒ révocation de tous les refresh tokens.
+- Guard JWT **global** (`JwtAuthGuard`) : toute route est protégée sauf `@Public()`. Routes d'auth : `@AuthRateLimit()` (throttler `auth`).
 
 ## Git
 - Branche de travail : `develop`. Jamais de push sur `main`, jamais de `--force`.
@@ -46,11 +48,14 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - PostgreSQL est exposé sur le port hôte **5433** (un PostgreSQL local occupe 5432).
 - `tsconfig` en `isolatedModules` : ts-jest transpile sans vérifier les types (sinon les tests sont très lents) ; le typage est vérifié par `npm run build` et `npm run lint`.
 - Globs TypeORM : toujours avec des `/` (Windows), voir `src/database/typeorm-options.ts`.
-- Les e2e utilisent `createTestApp()` (`test/utils`) : même pile HTTP que `main.ts` via `setupApp()`.
+- Les e2e utilisent `createTestApp()` (`test/utils`) : même pile HTTP que `main.ts` via `setupApp()`, seul l'email est remplacé par `FakeMailService` (`mail.lastResetCode(email)`). `resetDatabase(app)` vide les tables ; `registerUser(app)` crée un compte avec tokens.
+- Les e2e lèvent les limites de débit (`test/setup-env.ts`) ; seul `rate-limit.e2e-spec.ts` les abaisse.
+- TypeORM : `uuidExtension: 'pgcrypto'` (gen_random_uuid), colonnes en snake_case via `name:` explicite. `returning()` du QueryBuilder : passer une chaîne SQL (`'user_id, family_id'`), un tableau est ignoré silencieusement.
+- Test anti-dérive : `app.e2e-spec.ts` échoue si les entités et les migrations divergent.
 
 ## Jalons
 - [x] 1. Fondations (structure, Docker Compose, CI, config env)
-- [ ] 2. Authentification (inscription, connexion, refresh, déconnexion, reset mot de passe)
+- [x] 2. Authentification (inscription, connexion, refresh, déconnexion, reset mot de passe)
 - [ ] 3. Profil (création, édition, photo, visibilité)
 - [ ] 4. Contacts et partage (carte de contact, QR code personnel, scan)
 - [ ] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
