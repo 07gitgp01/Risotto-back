@@ -1,12 +1,13 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { RelationshipService } from '../connections/relationship.service';
+import { In, Repository } from 'typeorm';
+import { RelationshipService } from '../relationships/relationship.service';
 import { UsersService } from '../users/users.service';
 import { CreateProfileDto, UpdateProfileDto } from './dto/profile.dto';
 import { PhotoStorage } from './photo-storage.service';
 import { Profile } from './profile.entity';
 import {
+  MemberProfileView,
   OwnProfileView,
   profileAccess,
   ProfileView,
@@ -45,7 +46,10 @@ export class ProfilesService {
   }
 
   /** Someone else's profile, filtered by visibility and relationship (404 if hidden). */
-  async getForViewer(viewerId: string, ownerId: string): Promise<ProfileView> {
+  async getForViewer(
+    viewerId: string,
+    ownerId: string,
+  ): Promise<OwnProfileView | MemberProfileView> {
     const profile = await this.profiles.findOneBy({ userId: ownerId });
     if (!profile) {
       throw new NotFoundException(PROFILE_NOT_FOUND);
@@ -61,7 +65,36 @@ export class ProfilesService {
       return this.ownView(profile);
     }
     const owner = await this.users.getById(ownerId);
-    return toProfileView(profile, owner.email, access);
+    return {
+      ...toProfileView(profile, owner.email, access),
+      connection: await this.relationships.connectionState(viewerId, ownerId),
+    };
+  }
+
+  /**
+   * Profiles of several users as `viewerId` may see them, in the order of `ownerIds`.
+   * Users without profile, or hidden by a block, are left out.
+   */
+  async viewsFor(viewerId: string, ownerIds: string[]): Promise<Map<string, ProfileView>> {
+    const views = new Map<string, ProfileView>();
+    if (ownerIds.length === 0) {
+      return views;
+    }
+    const [profiles, users] = await Promise.all([
+      this.profiles.findBy({ userId: In(ownerIds) }),
+      this.users.findByIds(ownerIds),
+    ]);
+    const emails = new Map(users.map((user) => [user.id, user.email]));
+    for (const profile of profiles) {
+      const access = profileAccess(
+        profile.visibility,
+        await this.relationships.resolve(viewerId, profile.userId),
+      );
+      if (access !== 'none') {
+        views.set(profile.userId, toProfileView(profile, emails.get(profile.userId) ?? '', access));
+      }
+    }
+    return views;
   }
 
   async setPhoto(userId: string, image: Buffer): Promise<OwnProfileView> {

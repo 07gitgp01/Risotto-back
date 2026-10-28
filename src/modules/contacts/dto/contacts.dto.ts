@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ConnectionState } from '../../relationships/relationship.service';
 import { ContactCard } from '../contact-card';
 
 export class ScanQrDto {
@@ -38,6 +39,8 @@ export interface ScanResult {
   card: ContactCard;
   isSelf: boolean;
   saved: boolean;
+  /** Lets the app offer "connect" right after a scan. */
+  connection: ConnectionState;
 }
 
 export interface SavedContactView {

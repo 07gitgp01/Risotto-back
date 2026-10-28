@@ -20,7 +20,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { AuthUser, CurrentUser } from '../../common/auth/auth.decorators';
 import { CreateProfileDto, UpdateProfileDto } from './dto/profile.dto';
-import { OwnProfileView, ProfileView } from './profile-view';
+import { MemberProfileView, OwnProfileView } from './profile-view';
 import { ProfilesService } from './profiles.service';
 
 // Hard cap for the multipart parser; the configurable limit is enforced by PhotoStorage.
@@ -72,7 +72,7 @@ export class ProfilesController {
   get(
     @CurrentUser() user: AuthUser,
     @Param('userId', ParseUUIDPipe) userId: string,
-  ): Promise<ProfileView> {
+  ): Promise<OwnProfileView | MemberProfileView> {
     return this.profiles.getForViewer(user.id, userId);
   }
 

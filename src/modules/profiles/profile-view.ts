@@ -1,4 +1,4 @@
-import { Relationship } from '../connections/relationship.service';
+import { ConnectionState, Relationship } from '../relationships/relationship.service';
 import { Profile, ProfileVisibility } from './profile.entity';
 
 /**
@@ -50,6 +50,11 @@ export interface ProfileView {
   /** Relative to the API base URL; null when there is no photo or it is hidden. */
   photoUrl: string | null;
   updatedAt: string;
+}
+
+/** Someone else's profile, with the connection state between the two users. */
+export interface MemberProfileView extends ProfileView {
+  connection: ConnectionState;
 }
 
 /** The owner's own profile: everything, including the privacy settings. */

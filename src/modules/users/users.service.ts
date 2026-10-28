@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { In, QueryFailedError, Repository } from 'typeorm';
 import { User } from './user.entity';
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -36,6 +36,10 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
     return user;
+  }
+
+  findByIds(ids: string[]): Promise<User[]> {
+    return ids.length === 0 ? Promise.resolve([]) : this.users.findBy({ id: In(ids) });
   }
 
   findByEmail(email: string): Promise<User | null> {

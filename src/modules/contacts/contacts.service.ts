@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { randomToken } from '../../common/crypto/hashing';
-import { RelationshipService } from '../connections/relationship.service';
+import { RelationshipService } from '../relationships/relationship.service';
 import { Profile } from '../profiles/profile.entity';
 import { User } from '../users/user.entity';
 import { ContactCard, parseQrPayload, QR_PAYLOAD_PREFIX, toContactCard } from './contact-card';
@@ -64,7 +64,8 @@ export class ContactsService {
         .execute();
     }
     const saved = !isSelf && (await this.isSaved(viewerId, owner.id));
-    return { card, isSelf, saved };
+    const connection = await this.relationships.connectionState(viewerId, owner.id);
+    return { card, isSelf, saved, connection };
   }
 
   async list(ownerId: string): Promise<SavedContactView[]> {
