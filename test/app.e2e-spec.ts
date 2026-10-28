@@ -8,7 +8,7 @@ describe('Application foundations (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
-    app = await createTestApp();
+    ({ app } = await createTestApp());
   });
 
   afterAll(async () => {
@@ -74,6 +74,12 @@ describe('Application foundations (e2e)', () => {
         `SELECT count(*) FROM pg_extension WHERE extname = 'citext'`,
       );
       expect(Number(count)).toBe(1);
+    });
+
+    it('has no drift between entities and migrations', async () => {
+      const dataSource = app.get(DataSource);
+      const sql = await dataSource.driver.createSchemaBuilder().log();
+      expect(sql.upQueries.map((q) => q.query)).toEqual([]);
     });
   });
 });

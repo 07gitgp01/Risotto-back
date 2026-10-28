@@ -10,6 +10,9 @@ export function applyTestEnv(): void {
   }
   process.env.NODE_ENV = 'test';
   process.env.DB_NAME = process.env.DB_TEST_NAME ?? 'risotto_test';
+  // Suites share one client IP: rate limits are lifted, the rate-limit suite lowers them.
+  process.env.THROTTLE_LIMIT = '10000';
+  process.env.THROTTLE_AUTH_LIMIT = '10000';
 
   const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
   redisUrl.pathname = '/1';
