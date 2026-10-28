@@ -8,6 +8,8 @@ const root = `${__dirname}/..`.replace(/\\/g, '/');
 export function buildDataSourceOptions(db: AppConfig['db']): DataSourceOptions {
   return {
     type: 'postgres',
+    // gen_random_uuid() is built into PostgreSQL 13+, no uuid-ossp extension needed.
+    uuidExtension: 'pgcrypto',
     host: db.host,
     port: db.port,
     username: db.user,
