@@ -13,6 +13,7 @@ import { validateEnv } from './config/env.validation';
 import { buildDataSourceOptions } from './database/typeorm-options';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { RelationshipsModule } from './modules/relationships/relationships.module';
 import { ConnectionsModule } from './modules/connections/connections.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { MailModule } from './modules/mail/mail.module';
@@ -63,9 +64,10 @@ const reflector = new Reflector();
     MailModule,
     UsersModule,
     AuthModule,
-    ConnectionsModule,
+    RelationshipsModule,
     ProfilesModule,
     ContactsModule,
+    ConnectionsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
