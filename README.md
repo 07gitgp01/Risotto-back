@@ -85,6 +85,13 @@ Préfixe `/api`. Toutes les routes exigent `Authorization: Bearer <accessToken>`
 | `GET /contacts` | connecté | mes contacts enregistrés (cartes à jour + note privée) |
 | `PATCH /contacts/:contactId` | connecté | `{note}` ; `""` efface la note |
 | `DELETE /contacts/:contactId` | connecté | retire un contact |
+| `GET /users/search?q=` | connecté | recherche de membres (≥ 2 caractères, sans accents ni casse), avec l'état de relation |
+| `POST /connections` | connecté | `{userId}` ou `{qrPayload}`, `message?` : demande de mise en relation (accepte si l'autre a déjà demandé) |
+| `GET /connections` | connecté | mes relations |
+| `GET /connections/requests?direction=incoming\|outgoing` | connecté | demandes reçues / envoyées en attente |
+| `POST /connections/:id/accept` · `/decline` | destinataire | répondre à une demande |
+| `DELETE /connections/:id` | l'une des parties | annuler ma demande ou retirer une relation |
+| `POST /blocks` · `GET /blocks` · `DELETE /blocks/:userId` | connecté | bloquer, lister, débloquer |
 
 Les routes `/auth/*` ont une limitation de débit renforcée (`THROTTLE_AUTH_LIMIT` par minute et par IP).
 

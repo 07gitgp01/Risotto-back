@@ -51,6 +51,7 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - Les e2e utilisent `createTestApp()` (`test/utils`) : même pile HTTP que `main.ts` via `setupApp()`, seul l'email est remplacé par `FakeMailService` (`mail.lastResetCode(email)`). `resetDatabase(app)` vide les tables ; `registerUser(app)` crée un compte avec tokens.
 - Les e2e lèvent les limites de débit (`test/setup-env.ts`) ; seul `rate-limit.e2e-spec.ts` les abaisse.
 - TypeORM : `uuidExtension: 'pgcrypto'` (gen_random_uuid), colonnes en snake_case via `name:` explicite. `returning()` du QueryBuilder : passer une chaîne SQL (`'user_id, family_id'`), un tableau est ignoré silencieusement.
+- Modules : `relationships` (bas niveau, `RelationshipService`, aucun import de services métier) ← `profiles`, `contacts`, `connections`. Ne jamais faire dépendre `relationships` d'un module métier (cycle).
 - Visibilité : toute règle d'accès passe par `RelationshipService.resolve(viewer, owner)` (`self`/`connected`/`stranger`/`blocked`) puis `profileAccess()`. Ne pas dupliquer la logique ailleurs.
 - DTO : `@OptionalNotNull()` pour un champ facultatif qui ne doit jamais valoir null (sinon `@IsOptional` laisse passer null → 500).
 - QR : `risotto://u/<token>` (`parseQrPayload`). La carte de contact (`toContactCard`) ignore la visibilité mais respecte share_email/share_phone.
@@ -61,7 +62,7 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - [x] 2. Authentification (inscription, connexion, refresh, déconnexion, reset mot de passe)
 - [x] 3. Profil (création, édition, photo, visibilité)
 - [x] 4. Contacts et partage (carte de contact, QR code personnel, scan)
-- [ ] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
+- [x] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
 - [ ] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)
 - [ ] 7. Notifications (temps réel, push FCM, préférences)
 - [ ] 8. Tableau de bord (demandes en attente, non lus, activité récente)
