@@ -35,6 +35,21 @@ describe('AllExceptionsFilter', () => {
     expect(json.mock.calls[0][0]).toMatchObject({ statusCode: 404 });
   });
 
+  it('keeps the status of exposed client errors from Express middlewares', () => {
+    const { host, status, json } = mockHost();
+    const tooLarge = Object.assign(new Error('request entity too large: limit 102400'), {
+      status: 413,
+      expose: true,
+    });
+    filter.catch(tooLarge, host);
+    expect(status).toHaveBeenCalledWith(413);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: 413,
+      message: 'Payload too large',
+      error: 'Payload Too Large',
+    });
+  });
+
   it('hides the details of unexpected errors', () => {
     const { host, status, json } = mockHost();
     filter.catch(new Error('connection string postgres://user:pwd@db leaked'), host);
@@ -44,5 +59,13 @@ describe('AllExceptionsFilter', () => {
       message: 'Internal server error',
       error: 'Internal Server Error',
     });
+  });
+
+  it('does not trust a 5xx or unexposed status', () => {
+    const { host, status } = mockHost();
+    filter.catch(Object.assign(new Error('x'), { status: 503, expose: true }), host);
+    filter.catch(Object.assign(new Error('y'), { status: 400, expose: false }), host);
+    expect(status).toHaveBeenNthCalledWith(1, 500);
+    expect(status).toHaveBeenNthCalledWith(2, 500);
   });
 });

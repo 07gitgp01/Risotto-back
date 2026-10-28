@@ -37,6 +37,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    // Client errors raised by Express middlewares (e.g. body too large, malformed JSON).
+    const clientStatus = (exception as { status?: unknown; expose?: unknown } | null)?.status;
+    if (
+      typeof clientStatus === 'number' &&
+      clientStatus >= 400 &&
+      clientStatus < 500 &&
+      (exception as { expose?: unknown }).expose === true
+    ) {
+      response.status(clientStatus).json({
+        statusCode: clientStatus,
+        message: clientStatus === 413 ? 'Payload too large' : 'Bad request',
+        error: clientStatus === 413 ? 'Payload Too Large' : 'Bad Request',
+      } satisfies ErrorBody);
+      return;
+    }
+
     this.logger.error(exception instanceof Error ? exception.stack : String(exception));
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
