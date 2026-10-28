@@ -71,6 +71,13 @@ Préfixe `/api`. Toutes les routes exigent `Authorization: Bearer <accessToken>`
 | `POST /auth/forgot-password` | public | `{email}` → 204 toujours ; envoie un code à 6 chiffres si le compte existe |
 | `POST /auth/reset-password` | public | `{email, code, newPassword}` → 204 ; ferme toutes les sessions |
 | `GET /users/me` | connecté | utilisateur courant |
+| `GET /profiles/me` | connecté | mon profil (404 tant qu'il n'est pas créé) |
+| `POST /profiles/me` | connecté | crée mon profil (`firstName`, `lastName` obligatoires) |
+| `PATCH /profiles/me` | connecté | modifie mon profil ; `""` efface un champ facultatif |
+| `PUT /profiles/me/photo` | connecté | multipart, champ `photo` : JPEG/PNG/WebP ≤ 5 Mo, réencodée en WebP 512 px sans métadonnées |
+| `DELETE /profiles/me/photo` | connecté | supprime ma photo |
+| `GET /profiles/:userId` | connecté | profil d'un membre, filtré selon sa visibilité (`access`: `full`, `preview`, `minimal`) |
+| `GET /profiles/:userId/photo` | connecté | photo d'un membre (visible à partir du niveau `preview`) |
 
 Les routes `/auth/*` ont une limitation de débit renforcée (`THROTTLE_AUTH_LIMIT` par minute et par IP).
 

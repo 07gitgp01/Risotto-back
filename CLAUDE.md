@@ -9,7 +9,7 @@ Langue des échanges : français. Code, commits, noms techniques : anglais.
 - Socket.IO (namespace `/ws`) pour la messagerie et les notifications temps réel.
 - Tout tourne en local via Docker Compose (PostgreSQL, Redis, Mailpit, API). Pas de serveur de production.
 - Emails (reset mot de passe) : SMTP → Mailpit en local (UI http://localhost:8025).
-- Photos de profil : stockage disque local (`UPLOAD_DIR`, volume Docker), servies par un endpoint authentifié.
+- Photos de profil : stockage disque local (`UPLOAD_DIR`, volume Docker), servies par un endpoint authentifié. Toute image est décodée et réencodée par `sharp` (WebP 512 px, sans EXIF) : on ne stocke jamais le fichier envoyé tel quel.
 - Push : FCM via `firebase-admin`, désactivé si `FCM_SERVICE_ACCOUNT_PATH` est vide.
 - Architecture : un module Nest par domaine dans `src/modules/*`, code transverse dans `src/common`, config typée dans `src/config`.
 
@@ -51,12 +51,14 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - Les e2e utilisent `createTestApp()` (`test/utils`) : même pile HTTP que `main.ts` via `setupApp()`, seul l'email est remplacé par `FakeMailService` (`mail.lastResetCode(email)`). `resetDatabase(app)` vide les tables ; `registerUser(app)` crée un compte avec tokens.
 - Les e2e lèvent les limites de débit (`test/setup-env.ts`) ; seul `rate-limit.e2e-spec.ts` les abaisse.
 - TypeORM : `uuidExtension: 'pgcrypto'` (gen_random_uuid), colonnes en snake_case via `name:` explicite. `returning()` du QueryBuilder : passer une chaîne SQL (`'user_id, family_id'`), un tableau est ignoré silencieusement.
+- Visibilité : toute règle d'accès passe par `RelationshipService.resolve(viewer, owner)` (`self`/`connected`/`stranger`/`blocked`) puis `profileAccess()`. Ne pas dupliquer la logique ailleurs.
+- DTO : `@OptionalNotNull()` pour un champ facultatif qui ne doit jamais valoir null (sinon `@IsOptional` laisse passer null → 500).
 - Test anti-dérive : `app.e2e-spec.ts` échoue si les entités et les migrations divergent.
 
 ## Jalons
 - [x] 1. Fondations (structure, Docker Compose, CI, config env)
 - [x] 2. Authentification (inscription, connexion, refresh, déconnexion, reset mot de passe)
-- [ ] 3. Profil (création, édition, photo, visibilité)
+- [x] 3. Profil (création, édition, photo, visibilité)
 - [ ] 4. Contacts et partage (carte de contact, QR code personnel, scan)
 - [ ] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
 - [ ] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)

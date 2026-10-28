@@ -57,7 +57,7 @@ test/                tests unitaires et de widgets
 | `users` | id uuid PK, email citext (unique, minuscules), password_hash (argon2id), qr_token (unique, jalon 4), created_at, updated_at | |
 | `refresh_tokens` | id, user_id FK, family_id, token_hash (unique), expires_at, used_at, revoked_at, created_at, user_agent | index (user_id), (family_id) |
 | `password_reset_codes` | id, user_id FK, code_hash (HMAC-SHA256), expires_at, used_at, failed_attempts, created_at | TTL 30 min, 5 essais, seul le dernier code est valide |
-| `profiles` | user_id PK/FK, first_name, last_name, headline, job_title, company, bio, location, phone, website, photo_key, visibility (`public`/`connections`/`private`), share_email, share_phone, updated_at | |
+| `profiles` | user_id PK/FK, first_name, last_name, headline, job_title, company, bio, location, phone, website, photo_key, visibility (`public`/`connections`/`private`, défaut `connections`), share_email, share_phone (défaut false), updated_at | créé à l'onboarding (`POST /profiles/me`) |
 | `saved_contacts` | id, owner_id FK, contact_id FK, note, created_at | unique (owner_id, contact_id) |
 | `connections` | id, requester_id FK, addressee_id FK, status (`pending`/`accepted`/`declined`), created_at, responded_at | unique paire non orientée (least, greatest) |
 | `blocks` | blocker_id FK, blocked_id FK, created_at | PK (blocker_id, blocked_id) |
@@ -75,7 +75,7 @@ test/                tests unitaires et de widgets
 | Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/forgot-password`, `/auth/reset-password` | public, rate limit renforcé |
 | Auth | `POST /auth/logout`, `POST /auth/logout-all` | propriétaire du token |
 | Utilisateur | `GET /users/me` | soi-même |
-| Profil | `GET/PATCH /profiles/me`, `PUT/DELETE /profiles/me/photo` | soi-même |
+| Profil | `GET/POST/PATCH /profiles/me`, `PUT/DELETE /profiles/me/photo` | soi-même |
 | Profil | `GET /profiles/:userId`, `GET /profiles/:userId/photo` | selon visibilité, 404 si bloqué |
 | Contacts | `GET /contacts/card/me`, `GET /contacts`, `DELETE /contacts/:id` | propriétaire |
 | QR | `GET /qr/me`, `POST /qr/me/rotate`, `POST /qr/scan` (`connect` ou `save_contact`) | authentifié |
@@ -103,4 +103,6 @@ test/                tests unitaires et de widgets
 - Reset mot de passe (validé) : **code à 6 chiffres** envoyé par email (Mailpit en local), valable 30 min, usage unique, 5 essais maximum, révoque toutes les sessions. `POST /auth/reset-password {email, code, newPassword}`.
 - Mot de passe : 8 à 128 caractères, au moins une lettre et un chiffre.
 - Hachage : argon2id via `@node-rs/argon2` (binaires précompilés ; le paquet `argon2` exige une compilation C++ sous Windows).
-- Photos : JPEG/PNG/WebP ≤ 5 Mo, vérification des magic bytes, stockage disque local.
+- Photos : JPEG/PNG/WebP ≤ 5 Mo ; le format est détecté par décodage (sharp), puis l'image est réencodée en WebP 512 px max, sans métadonnées (EXIF/GPS supprimés). Stockage disque local (`UPLOAD_DIR/photos`), nom aléatoire, servie via `GET /profiles/:userId/photo` (authentifié, même règle de visibilité que le profil).
+- Profil : créé après l'inscription via un écran d'onboarding (prénom + nom obligatoires). Visibilité par défaut `connections`, email et téléphone non partagés par défaut (confidentialité par défaut).
+- Niveaux d'accès d'un profil : `full` (soi, relations, ou profil public), `preview` (nom, titre, photo : profil `connections` vu par un non-relation), `minimal` (nom seul : profil `private`), 404 si blocage.
