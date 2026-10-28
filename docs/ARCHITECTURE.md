@@ -87,7 +87,7 @@ test/                tests unitaires et de widgets
 | Messagerie | `GET /conversations/:id/messages?before=&limit=`, `POST /conversations/:id/messages`, `POST /conversations/:id/read` | membre |
 | Notifications | `GET /notifications`, `POST /notifications/:id/read`, `POST /notifications/read-all` | propriétaire |
 | Notifications | `GET/PUT /notifications/preferences`, `POST /devices`, `DELETE /devices {token}` (jeton dans le corps : trop long pour une URL) | soi-même |
-| Tableau de bord | `GET /dashboard` | soi-même |
+| Tableau de bord | `GET /dashboard` : demandes reçues (nombre + 3 dernières), messages non lus (nombre + 3 conversations), notifications non lues, nombre de relations et de contacts, 10 dernières activités | soi-même |
 
 ## Socket.IO (`/ws`, auth : `auth.token` = access token)
 - Client → serveur : `message:send {conversationId, body}`, `conversation:read {conversationId}` ; réponse par acquittement `{ok, data}` ou `{ok: false, error, status}` (jamais d'exception). Envoi limité à 20 messages / 10 s / utilisateur.

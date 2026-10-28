@@ -103,6 +103,7 @@ Préfixe `/api`. Toutes les routes exigent `Authorization: Bearer <accessToken>`
 | `POST /notifications/:id/read` · `POST /notifications/read-all` | propriétaire | marquer comme lu |
 | `GET /notifications/preferences` · `PUT /notifications/preferences` | connecté | `{preferences: [{type, inApp?, push?}]}` |
 | `POST /devices` · `DELETE /devices` | connecté | `{token, platform}` / `{token}` : jeton FCM de l'appareil |
+| `GET /dashboard` | connecté | résumé de l'accueil : demandes en attente, messages non lus, notifications non lues, statistiques, activité récente |
 
 ### Temps réel (Socket.IO)
 

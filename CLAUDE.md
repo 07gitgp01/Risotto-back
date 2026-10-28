@@ -69,5 +69,5 @@ npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migrat
 - [x] 5. Mise en relation (recherche, demande, acceptation/refus, blocage)
 - [x] 6. Messagerie (WebSocket, historique paginé, accusés de lecture, chiffrement au repos)
 - [x] 7. Notifications (temps réel, push FCM, préférences)
-- [ ] 8. Tableau de bord (demandes en attente, non lus, activité récente)
+- [x] 8. Tableau de bord (demandes en attente, non lus, activité récente)
 - [ ] 9. Finalisation (revue sécurité, performances, accessibilité, hors ligne)
