@@ -5,6 +5,7 @@ import { DataSource, IsNull, MoreThan, Repository } from 'typeorm';
 import { hmacSha256, randomDigits, safeEqualHex } from '../../common/crypto/hashing';
 import { AppConfig } from '../../config/configuration';
 import { MailService } from '../mail/mail.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { User } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
 import { ResetPasswordDto } from './dto/auth.dto';
@@ -26,6 +27,7 @@ export class PasswordResetService {
     private readonly users: UsersService,
     private readonly hasher: PasswordHasher,
     private readonly mail: MailService,
+    private readonly realtime: RealtimeService,
   ) {
     this.authConfig = config.getOrThrow<AppConfig['auth']>('auth');
   }
@@ -93,6 +95,7 @@ export class PasswordResetService {
         { revokedAt: new Date() },
       );
     });
+    this.realtime.disconnectUser(user.id);
   }
 
   /** Atomic increment, so parallel guesses cannot exceed the attempt budget. */

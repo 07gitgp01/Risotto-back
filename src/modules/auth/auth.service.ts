@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { RealtimeService } from '../realtime/realtime.service';
 import { toUserView, UsersService } from '../users/users.service';
 import { AuthResponse, AuthTokens, LoginDto, RegisterDto } from './dto/auth.dto';
 import { PasswordHasher } from './password-hasher.service';
@@ -10,6 +11,7 @@ export class AuthService {
     private readonly users: UsersService,
     private readonly hasher: PasswordHasher,
     private readonly tokens: TokensService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async register(dto: RegisterDto, userAgent?: string): Promise<AuthResponse> {
@@ -37,7 +39,9 @@ export class AuthService {
     return this.tokens.revokeSession(userId, refreshToken);
   }
 
-  logoutAll(userId: string): Promise<void> {
-    return this.tokens.revokeAllForUser(userId);
+  /** Revokes every session and closes every open socket of the user. */
+  async logoutAll(userId: string): Promise<void> {
+    await this.tokens.revokeAllForUser(userId);
+    this.realtime.disconnectUser(userId);
   }
 }

@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { RedisIoAdapter } from './modules/realtime/redis-io.adapter';
 
 /** Global HTTP hardening, shared by main.ts and the e2e tests so both run the same stack. */
 export function setupApp(app: INestApplication): void {
@@ -23,5 +24,6 @@ export function setupApp(app: INestApplication): void {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
+  app.useWebSocketAdapter(new RedisIoAdapter(app));
   app.enableShutdownHooks();
 }
