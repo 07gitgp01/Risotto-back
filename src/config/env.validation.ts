@@ -45,6 +45,9 @@ export const envValidationSchema = Joi.object<Record<string, unknown>>({
 
   MESSAGE_ENCRYPTION_KEY: aes256Key.required(),
 
+  // Optional: push notifications are disabled when empty.
+  FCM_SERVICE_ACCOUNT_PATH: Joi.string().allow('').default(''),
+
   UPLOAD_DIR: Joi.string().default('./uploads'),
   PHOTO_MAX_BYTES: Joi.number()
     .integer()

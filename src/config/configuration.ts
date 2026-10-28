@@ -40,6 +40,10 @@ export interface AppConfig {
     /** AES-256-GCM key for messages at rest (base64, 32 bytes). */
     encryptionKey: string;
   };
+  push: {
+    /** Firebase service account JSON file; empty = push disabled. */
+    fcmServiceAccountPath: string;
+  };
 }
 
 export function parseCorsOrigins(raw: string | undefined): string[] {
@@ -90,5 +94,8 @@ export default (): AppConfig => ({
   },
   messaging: {
     encryptionKey: process.env.MESSAGE_ENCRYPTION_KEY ?? '',
+  },
+  push: {
+    fcmServiceAccountPath: process.env.FCM_SERVICE_ACCOUNT_PATH ?? '',
   },
 });
