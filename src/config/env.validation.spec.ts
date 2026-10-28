@@ -6,6 +6,9 @@ const validEnv = {
   DB_PASSWORD: 'secret',
   DB_NAME: 'risotto',
   REDIS_URL: 'redis://localhost:6379/0',
+  JWT_ACCESS_SECRET: 'a'.repeat(32),
+  TOKEN_HASH_SECRET: 'b'.repeat(32),
+  SMTP_HOST: 'localhost',
 };
 
 describe('validateEnv', () => {
@@ -26,17 +29,29 @@ describe('validateEnv', () => {
     expect(env.DB_PORT).toBe(5433);
   });
 
-  it.each(['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'REDIS_URL'])(
-    'rejects a missing %s',
-    (key) => {
-      const env: Record<string, unknown> = { ...validEnv };
-      delete env[key];
-      expect(() => validateEnv(env)).toThrow(key);
-    },
-  );
+  it.each([
+    'DB_HOST',
+    'DB_USER',
+    'DB_PASSWORD',
+    'DB_NAME',
+    'REDIS_URL',
+    'JWT_ACCESS_SECRET',
+    'TOKEN_HASH_SECRET',
+    'SMTP_HOST',
+  ])('rejects a missing %s', (key) => {
+    const env: Record<string, unknown> = { ...validEnv };
+    delete env[key];
+    expect(() => validateEnv(env)).toThrow(key);
+  });
 
   it('rejects an unknown NODE_ENV', () => {
     expect(() => validateEnv({ ...validEnv, NODE_ENV: 'staging' })).toThrow('NODE_ENV');
+  });
+
+  it('rejects secrets shorter than 32 characters', () => {
+    expect(() => validateEnv({ ...validEnv, JWT_ACCESS_SECRET: 'short' })).toThrow(
+      'JWT_ACCESS_SECRET',
+    );
   });
 
   it('rejects a non-redis REDIS_URL', () => {

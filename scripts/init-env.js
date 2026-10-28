@@ -10,6 +10,7 @@ if (existsSync('.env')) {
 const generated = {
   DB_PASSWORD: randomBytes(18).toString('hex'),
   JWT_ACCESS_SECRET: randomBytes(48).toString('base64'),
+  TOKEN_HASH_SECRET: randomBytes(48).toString('base64'),
   MESSAGE_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
 };
 
