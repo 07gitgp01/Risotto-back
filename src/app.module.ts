@@ -17,7 +17,9 @@ import { RelationshipsModule } from './modules/relationships/relationships.modul
 import { ConnectionsModule } from './modules/connections/connections.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { MailModule } from './modules/mail/mail.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { UsersModule } from './modules/users/users.module';
 
 const reflector = new Reflector();
@@ -68,6 +70,8 @@ const reflector = new Reflector();
     ProfilesModule,
     ContactsModule,
     ConnectionsModule,
+    RealtimeModule,
+    MessagingModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
