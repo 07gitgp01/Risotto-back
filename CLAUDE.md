@@ -24,6 +24,8 @@ Langue des échanges : français. Code, commits, noms techniques : anglais.
 - Réponses anti-énumération : `forgot-password` répond toujours 204 (email envoyé en arrière-plan) ; `login` renvoie le même 401 et vérifie un hash factice si l'email est inconnu.
 - Reset mot de passe : code à 6 chiffres, HMAC-SHA256 (`TOKEN_HASH_SECRET`), 30 min, 5 essais (incrément atomique), seul le dernier code est valide, succès ⇒ révocation de tous les refresh tokens.
 - Guard JWT **global** (`JwtAuthGuard`) : toute route est protégée sauf `@Public()`. Routes d'auth : `@AuthRateLimit()` (throttler `auth`).
+- Administration (`/api/admin/*`) : `AdminGuard` relit le rôle en base à **chaque** requête (jamais dans le JWT), donc un retrait de rôle est immédiat. Le rôle `admin` ne s'obtient **que** en ligne de commande (`npm run admin:grant -- <email>`), jamais par l'API. Un admin voit les emails et noms des comptes, jamais les messages ni les champs privés des profils.
+- Suspension : bloque la connexion (403 `Account suspended`, renvoyé seulement si le mot de passe est juste), révoque toutes les sessions, ferme les sockets, retire le membre de la recherche. Un admin ne peut suspendre ni lui-même ni un autre admin.
 
 ## Git
 - Branche de travail : `develop`. Jamais de push sur `main`, jamais de `--force`.
@@ -42,11 +44,13 @@ docker compose up -d postgres redis mailpit
 npm run migration:run
 npm run start:dev                 # API sur http://localhost:3000/api
 npm run seed                      # comptes de démo (alice@risotto.dev … / Risotto2026)
+npm run admin:grant -- admin@risotto.dev   # donne le rôle admin (admin:revoke pour le retirer)
 npm run lint && npm test && npm run test:e2e && npm run build
 docker compose up -d --build      # tout en conteneurs (API incluse, migrations au démarrage)
 npm run migration:generate -- src/database/migrations/<Name>   # nouvelle migration
 ```
 - PostgreSQL est exposé sur le port hôte **5433** (un PostgreSQL local occupe 5432).
+- Windows réserve parfois des plages de ports (`netsh interface ipv4 show excludedportrange protocol=tcp`), dont 6379 et 1025 : changer alors `REDIS_HOST_PORT`/`REDIS_URL` et `SMTP_HOST_PORT`/`SMTP_PORT` dans `.env` (ex. 16379 et 11025). Les conteneurs, eux, se parlent toujours sur les ports internes.
 - `tsconfig` en `isolatedModules` : ts-jest transpile sans vérifier les types (sinon les tests sont très lents) ; le typage est vérifié par `npm run build` et `npm run lint`.
 - Globs TypeORM : toujours avec des `/` (Windows), voir `src/database/typeorm-options.ts`.
 - Les e2e utilisent `createTestApp()` (`test/utils`) : même pile HTTP que `main.ts` via `setupApp()`, seul l'email est remplacé par `FakeMailService` (`mail.lastResetCode(email)`). `resetDatabase(app)` vide les tables ; `registerUser(app)` crée un compte avec tokens.
