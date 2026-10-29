@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, QueryFailedError, Repository } from 'typeorm';
-import { User } from './user.entity';
+import { User, UserRole } from './user.entity';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -15,11 +15,17 @@ function isUniqueViolation(error: unknown): boolean {
 export interface UserView {
   id: string;
   email: string;
+  role: UserRole;
   createdAt: string;
 }
 
 export function toUserView(user: User): UserView {
-  return { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() };
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    createdAt: user.createdAt.toISOString(),
+  };
 }
 
 @Injectable()

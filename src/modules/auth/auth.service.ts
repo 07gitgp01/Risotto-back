@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Inject,
@@ -58,6 +59,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
     await this.redis.del(failuresKey);
+    // Only said once the password is right, so it reveals nothing to a stranger.
+    if (user.suspendedAt) {
+      throw new ForbiddenException('Account suspended');
+    }
     const tokens = await this.tokens.issueForNewSession(user.id, userAgent);
     return { ...tokens, user: toUserView(user) };
   }

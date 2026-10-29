@@ -38,7 +38,12 @@ describe('Authentication (e2e)', () => {
         refreshToken: expect.any(String),
         tokenType: 'Bearer',
         expiresIn: 900,
-        user: { id: expect.any(String), email: 'alice@example.com', createdAt: expect.any(String) },
+        user: {
+          id: expect.any(String),
+          email: 'alice@example.com',
+          role: 'member',
+          createdAt: expect.any(String),
+        },
       });
       expect(JSON.stringify(res.body)).not.toMatch(/password/i);
     });
@@ -105,7 +110,12 @@ describe('Authentication (e2e)', () => {
       const user = await registerUser(app);
       const res = await request(server).get('/api/users/me').set(bearer(user.accessToken));
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ id: user.id, email: user.email, createdAt: expect.any(String) });
+      expect(res.body).toEqual({
+        id: user.id,
+        email: user.email,
+        role: 'member',
+        createdAt: expect.any(String),
+      });
     });
 
     it('GET /api/users/me requires a token', async () => {

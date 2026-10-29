@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -6,7 +7,10 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+export type UserRole = 'member' | 'admin';
+
 @Entity({ name: 'users' })
+@Check('CHK_users_role', `"role" IN ('member', 'admin')`)
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -25,6 +29,14 @@ export class User {
   /** Random, rotatable token encoded in the personal QR code (never the user id). */
   @Column({ name: 'qr_token', type: 'varchar', length: 64, nullable: true, unique: true })
   qrToken: string | null;
+
+  /** Granted only from the command line (`npm run admin:grant`), never through the API. */
+  @Column({ type: 'varchar', length: 16, default: 'member' })
+  role: UserRole;
+
+  /** Set by an admin: the account can no longer sign in. */
+  @Column({ name: 'suspended_at', type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
