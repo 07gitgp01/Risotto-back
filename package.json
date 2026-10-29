@@ -23,7 +23,9 @@
     "migration:revert": "npm run typeorm -- migration:revert",
     "migration:run:prod": "typeorm -d dist/database/data-source.js migration:run",
     "env:init": "node scripts/init-env.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "admin:grant": "node scripts/admin-role.js grant",
+    "admin:revoke": "node scripts/admin-role.js revoke"
   },
   "jest": {
     "moduleFileExtensions": [

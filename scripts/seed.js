@@ -75,6 +75,16 @@ const PEOPLE = {
       phone: '+33 7 98 76 54 32',
     },
   },
+  admin: {
+    email: 'admin@risotto.dev',
+    profile: {
+      firstName: 'Équipe',
+      lastName: 'Risotto',
+      headline: 'Administration de Risotto',
+      company: 'Risotto SAS',
+      visibility: 'private',
+    },
+  },
 };
 
 async function call(method, path, { token, body, expect = [200, 201, 204] } = {}) {
@@ -140,8 +150,8 @@ async function main() {
   console.log(`Seeding ${API} …`);
   await call('GET', '/health');
 
-  const [alice, bob, carol, david, emma] = await Promise.all(
-    ['alice', 'bob', 'carol', 'david', 'emma'].map(account),
+  const [alice, bob, carol, david, emma, admin] = await Promise.all(
+    ['alice', 'bob', 'carol', 'david', 'emma', 'admin'].map(account),
   );
 
   // Alice ↔ Bob and Alice ↔ Emma connected; Carol → Alice pending; Alice → David pending.
@@ -184,14 +194,17 @@ async function main() {
   });
 
   console.log('\nDemo accounts (password for all: %s)', PASSWORD);
-  for (const person of [alice, bob, carol, david, emma]) {
+  for (const person of [alice, bob, carol, david, emma, admin]) {
     console.log(`  ${PEOPLE[person.key].email.padEnd(20)} ${PEOPLE[person.key].profile.headline}`);
   }
   console.log(`
 Sign in as alice@risotto.dev to see:
   - 2 connections (Bob, Émma), 1 incoming request (Carol), 1 sent request (David)
   - a conversation with Bob with 2 unread messages
-  - David's card in contacts, notifications for the requests`);
+  - David's card in contacts, notifications for the requests
+
+The API never grants the admin role. To make admin@risotto.dev an administrator:
+  npm run admin:grant -- admin@risotto.dev`);
 }
 
 main().catch((error) => {
