@@ -22,7 +22,7 @@ export class SearchService {
   /**
    * Accent- and case-insensitive search on names and headline; company and job title
    * only for public profiles (they are hidden from strangers otherwise). Private
-   * profiles, blocked users and the viewer are excluded.
+   * profiles, suspended accounts, blocked users and the viewer are excluded.
    */
   async search(viewerId: string, query: SearchQuery): Promise<SearchResult[]> {
     const excluded = [viewerId, ...(await this.relationships.blockedUserIds(viewerId))];
@@ -31,6 +31,9 @@ export class SearchService {
       .select('p.user_id', 'userId')
       .where(`p.visibility <> 'private'`)
       .andWhere('p.user_id NOT IN (:...excluded)', { excluded })
+      .andWhere(
+        'NOT EXISTS (SELECT 1 FROM users u WHERE u.id = p.user_id AND u.suspended_at IS NOT NULL)',
+      )
       // Same expression as the trigram index IDX_profiles_search (see the migration).
       .andWhere(
         `profile_search_text(p.visibility, p.first_name, p.last_name, p.headline,

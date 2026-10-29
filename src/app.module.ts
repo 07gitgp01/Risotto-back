@@ -12,6 +12,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
 import configuration, { AppConfig } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { buildDataSourceOptions } from './database/typeorm-options';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { RelationshipsModule } from './modules/relationships/relationships.module';
@@ -78,6 +79,7 @@ const reflector = new Reflector();
     MessagingModule,
     NotificationsModule,
     DashboardModule,
+    AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
