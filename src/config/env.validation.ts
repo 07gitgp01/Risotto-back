@@ -26,6 +26,8 @@ export const envValidationSchema = Joi.object<Record<string, unknown>>({
   DB_NAME: Joi.string().when('DATABASE_URL', { is: Joi.exist(), otherwise: Joi.required() }),
   // TLS to the database (external connections to a hosted database).
   DB_SSL: Joi.boolean().default(false),
+  // PEM certificate of the database's CA (e.g. Supabase), to verify the server.
+  DB_SSL_CA: Joi.string().allow('').default(''),
 
   // Express "trust proxy": hop count behind a hosting proxy (e.g. 1), or 'loopback'.
   TRUST_PROXY: Joi.alternatives()

@@ -19,7 +19,8 @@ export function buildDataSourceOptions(db: AppConfig['db']): DataSourceOptions {
           password: db.password,
           database: db.name,
         }),
-    ssl: db.ssl,
+    // The certificate is always verified: with a private CA (Supabase), pass it in DB_SSL_CA.
+    ssl: db.ssl ? (db.sslCa ? { ca: db.sslCa } : true) : false,
     entities: [`${root}/**/*.entity.{ts,js}`],
     migrations: [`${root}/database/migrations/*.{ts,js}`],
     synchronize: false,

@@ -4,11 +4,11 @@
 //   npm run admin:grant -- alice@risotto.dev
 //   npm run admin:revoke -- alice@risotto.dev
 //
-// Reads DATABASE_URL (+ DB_SSL) or the DB_* variables from the environment or the
-// local .env file. Hosted database (Render), from your machine:
-//   DATABASE_URL="<external URL>" DB_SSL=true npm run admin:grant -- alice@risotto.dev
+// Reads DATABASE_URL (+ DB_SSL, DB_SSL_CA_FILE) or the DB_* variables from the
+// environment or the local .env file. Hosted database (Supabase), from your machine:
+//   DATABASE_URL="<url>" DB_SSL=true DB_SSL_CA_FILE=prod-ca-2021.crt npm run admin:grant -- alice@risotto.dev
 
-const { existsSync } = require('fs');
+const { existsSync, readFileSync } = require('fs');
 const { Client } = require('pg');
 
 if (existsSync('.env')) {
@@ -22,7 +22,9 @@ if (!['grant', 'revoke'].includes(action) || !email) {
 }
 
 async function main() {
-  const ssl = process.env.DB_SSL === 'true';
+  const caFile = process.env.DB_SSL_CA_FILE;
+  const ssl =
+    process.env.DB_SSL === 'true' ? (caFile ? { ca: readFileSync(caFile, 'utf8') } : true) : false;
   const client = new Client(
     process.env.DATABASE_URL
       ? { connectionString: process.env.DATABASE_URL, ssl }

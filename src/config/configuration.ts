@@ -8,6 +8,8 @@ export interface AppConfig {
     /** Full connection string; when set, the separate fields are ignored. */
     url?: string;
     ssl: boolean;
+    /** PEM CA certificate checked when `ssl` is on; empty = system CAs. */
+    sslCa: string;
     host: string;
     port: number;
     user: string;
@@ -72,6 +74,8 @@ export default (): AppConfig => ({
   db: {
     url: process.env.DATABASE_URL || undefined,
     ssl: process.env.DB_SSL === 'true',
+    // A one-line value may carry literal "\n" instead of line breaks.
+    sslCa: (process.env.DB_SSL_CA ?? '').replace(/\\n/g, '\n'),
     host: process.env.DB_HOST ?? 'localhost',
     port: Number(process.env.DB_PORT ?? 5432),
     user: process.env.DB_USER ?? '',
