@@ -10,11 +10,16 @@ export function buildDataSourceOptions(db: AppConfig['db']): DataSourceOptions {
     type: 'postgres',
     // gen_random_uuid() is built into PostgreSQL 13+, no uuid-ossp extension needed.
     uuidExtension: 'pgcrypto',
-    host: db.host,
-    port: db.port,
-    username: db.user,
-    password: db.password,
-    database: db.name,
+    ...(db.url
+      ? { url: db.url }
+      : {
+          host: db.host,
+          port: db.port,
+          username: db.user,
+          password: db.password,
+          database: db.name,
+        }),
+    ssl: db.ssl,
     entities: [`${root}/**/*.entity.{ts,js}`],
     migrations: [`${root}/database/migrations/*.{ts,js}`],
     synchronize: false,

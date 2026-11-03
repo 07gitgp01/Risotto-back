@@ -14,11 +14,23 @@ export const envValidationSchema = Joi.object<Record<string, unknown>>({
   PORT: Joi.number().port().default(3000),
   CORS_ORIGINS: Joi.string().allow('').default(''),
 
-  DB_HOST: Joi.string().required(),
+  // Either a full connection string (hosted databases) or the separate DB_* fields.
+  DATABASE_URL: Joi.string().uri({ scheme: ['postgres', 'postgresql'] }),
+  DB_HOST: Joi.string().when('DATABASE_URL', { is: Joi.exist(), otherwise: Joi.required() }),
   DB_PORT: Joi.number().port().default(5432),
-  DB_USER: Joi.string().required(),
-  DB_PASSWORD: Joi.string().required(),
-  DB_NAME: Joi.string().required(),
+  DB_USER: Joi.string().when('DATABASE_URL', { is: Joi.exist(), otherwise: Joi.required() }),
+  DB_PASSWORD: Joi.string().when('DATABASE_URL', {
+    is: Joi.exist(),
+    otherwise: Joi.required(),
+  }),
+  DB_NAME: Joi.string().when('DATABASE_URL', { is: Joi.exist(), otherwise: Joi.required() }),
+  // TLS to the database (external connections to a hosted database).
+  DB_SSL: Joi.boolean().default(false),
+
+  // Express "trust proxy": hop count behind a hosting proxy (e.g. 1), or 'loopback'.
+  TRUST_PROXY: Joi.alternatives()
+    .try(Joi.number().integer().min(0), Joi.string().valid('loopback'))
+    .default('loopback'),
 
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
@@ -50,7 +62,6 @@ export const envValidationSchema = Joi.object<Record<string, unknown>>({
   // Optional: push notifications are disabled when empty.
   FCM_SERVICE_ACCOUNT_PATH: Joi.string().allow('').default(''),
 
-  UPLOAD_DIR: Joi.string().default('./uploads'),
   PHOTO_MAX_BYTES: Joi.number()
     .integer()
     .positive()

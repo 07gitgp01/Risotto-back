@@ -1,4 +1,4 @@
-import configuration, { parseCorsOrigins } from './configuration';
+import configuration, { parseCorsOrigins, parseTrustProxy } from './configuration';
 
 describe('parseCorsOrigins', () => {
   it('returns an empty list when unset or blank (deny all browser origins)', () => {
@@ -11,6 +11,14 @@ describe('parseCorsOrigins', () => {
       'http://a.test',
       'http://b.test',
     ]);
+  });
+});
+
+describe('parseTrustProxy', () => {
+  it('reads a hop count and falls back to loopback', () => {
+    expect(parseTrustProxy('1')).toBe(1);
+    expect(parseTrustProxy(undefined)).toBe('loopback');
+    expect(parseTrustProxy('loopback')).toBe('loopback');
   });
 });
 

@@ -2,7 +2,12 @@ export interface AppConfig {
   nodeEnv: 'development' | 'test' | 'production';
   port: number;
   corsOrigins: string[];
+  /** Express "trust proxy" value (hop count or 'loopback'). */
+  trustProxy: number | 'loopback';
   db: {
+    /** Full connection string; when set, the separate fields are ignored. */
+    url?: string;
+    ssl: boolean;
     host: string;
     port: number;
     user: string;
@@ -35,7 +40,6 @@ export interface AppConfig {
     from: string;
   };
   uploads: {
-    dir: string;
     photoMaxBytes: number;
   };
   messaging: {
@@ -55,12 +59,19 @@ export function parseCorsOrigins(raw: string | undefined): string[] {
     .filter((origin) => origin.length > 0);
 }
 
+export function parseTrustProxy(raw: string | undefined): number | 'loopback' {
+  return raw && /^\d+$/.test(raw) ? Number(raw) : 'loopback';
+}
+
 /** Builds the typed config from already-validated env variables. */
 export default (): AppConfig => ({
   nodeEnv: (process.env.NODE_ENV as AppConfig['nodeEnv']) ?? 'development',
   port: Number(process.env.PORT ?? 3000),
   corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   db: {
+    url: process.env.DATABASE_URL || undefined,
+    ssl: process.env.DB_SSL === 'true',
     host: process.env.DB_HOST ?? 'localhost',
     port: Number(process.env.DB_PORT ?? 5432),
     user: process.env.DB_USER ?? '',
@@ -93,7 +104,6 @@ export default (): AppConfig => ({
     from: process.env.MAIL_FROM ?? 'Risotto <no-reply@risotto.local>',
   },
   uploads: {
-    dir: process.env.UPLOAD_DIR ?? './uploads',
     photoMaxBytes: Number(process.env.PHOTO_MAX_BYTES ?? 5 * 1024 * 1024),
   },
   messaging: {

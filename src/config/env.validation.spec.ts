@@ -68,6 +68,29 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...validEnv, REDIS_URL: 'http://localhost' })).toThrow('REDIS_URL');
   });
 
+  it('accepts a DATABASE_URL instead of the DB_* fields', () => {
+    const env: Record<string, unknown> = {
+      ...validEnv,
+      DATABASE_URL: 'postgresql://risotto:secret@db.internal:5432/risotto',
+    };
+    for (const key of ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']) {
+      delete env[key];
+    }
+    expect(validateEnv(env)).toMatchObject({ DB_SSL: false });
+  });
+
+  it('rejects a DATABASE_URL that is not PostgreSQL', () => {
+    expect(() => validateEnv({ ...validEnv, DATABASE_URL: 'mysql://x@y/z' })).toThrow(
+      'DATABASE_URL',
+    );
+  });
+
+  it('accepts a hop count or loopback for TRUST_PROXY', () => {
+    expect(validateEnv({ ...validEnv }).TRUST_PROXY).toBe('loopback');
+    expect(validateEnv({ ...validEnv, TRUST_PROXY: '1' }).TRUST_PROXY).toBe(1);
+    expect(() => validateEnv({ ...validEnv, TRUST_PROXY: 'true' })).toThrow('TRUST_PROXY');
+  });
+
   it('reports every error at once', () => {
     expect(() => validateEnv({})).toThrow(/DB_HOST.*DB_USER/s);
   });
