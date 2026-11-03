@@ -7,9 +7,9 @@ Langue des échanges : français. Code, commits, noms techniques : anglais.
 - Node.js 20+ / NestJS 11 (TypeScript strict), PostgreSQL 16, TypeORM 0.3 avec **migrations versionnées** (`synchronize: false` partout).
 - Redis 7 : stockage du rate limiting, adapter Socket.IO, cache léger.
 - Socket.IO (namespace `/ws`) pour la messagerie et les notifications temps réel.
-- Tout tourne en local via Docker Compose (PostgreSQL, Redis, Mailpit, API). Pas de serveur de production.
+- Développement en local via Docker Compose (PostgreSQL, Redis, Mailpit, API). Hébergement : Render, offre gratuite, décrit par `render.yaml` (Blueprint, branche `develop`, guide `docs/DEPLOY_RENDER.md`). Sur Render, la base arrive par `DATABASE_URL` (remplace les `DB_*`), `TRUST_PROXY=1` (nombre de proxys devant l'API, pour l'IP client du rate limiting ; `loopback` en local), emails via le relais SMTP Brevo. Les suites e2e suppriment `DATABASE_URL` pour ne jamais viser une autre base.
 - Emails (reset mot de passe) : SMTP → Mailpit en local (UI http://localhost:8025).
-- Photos de profil : stockage disque local (`UPLOAD_DIR`, volume Docker), servies par un endpoint authentifié. Toute image est décodée et réencodée par `sharp` (WebP 512 px, sans EXIF) : on ne stocke jamais le fichier envoyé tel quel.
+- Photos de profil : stockées dans PostgreSQL (table `profile_photos`, une par utilisateur, clé = `profiles.photo_key`) car les instances hébergées n'ont pas de disque persistant ; servies par un endpoint authentifié. Toute image est décodée et réencodée par `sharp` (WebP 512 px, sans EXIF) : on ne stocke jamais le fichier envoyé tel quel.
 - Push : FCM via `firebase-admin`, désactivé si `FCM_SERVICE_ACCOUNT_PATH` est vide.
 - Architecture : un module Nest par domaine dans `src/modules/*`, code transverse dans `src/common`, config typée dans `src/config`.
 

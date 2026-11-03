@@ -1,0 +1,69 @@
+# Render Blueprint: API (Docker) + PostgreSQL + Key Value (Redis), free plans.
+# Dashboard > New > Blueprint > this repository, branch develop. See docs/DEPLOY_RENDER.md.
+# Free plans: the API sleeps after 15 min without traffic (~1 min to wake up) and the
+# free database expires 30 days after creation (upgrade it before then to keep the data).
+services:
+  - type: web
+    name: risotto-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: develop
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: risotto-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: risotto-redis
+          property: connectionString
+      # One proxy in front of the service; see docs/DEPLOY_RENDER.md to check it.
+      - key: TRUST_PROXY
+        value: '1'
+      # Mobile apps send no Origin: no browser origin is allowed.
+      - key: CORS_ORIGINS
+        value: ''
+      # Generated once by Render (32 random bytes, base64). Never change
+      # MESSAGE_ENCRYPTION_KEY afterwards: existing messages would become unreadable.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: TOKEN_HASH_SECRET
+        generateValue: true
+      - key: MESSAGE_ENCRYPTION_KEY
+        generateValue: true
+      # Brevo SMTP relay (password reset codes). Credentials are entered in the dashboard.
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: '587'
+      - key: SMTP_SECURE
+        value: 'false'
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+
+  - type: keyvalue
+    name: risotto-redis
+    plan: free
+    region: frankfurt
+    # Rate-limit counters and Socket.IO messages must not be evicted.
+    maxmemoryPolicy: noeviction
+    # Empty list: reachable only from Render services in the same region.
+    ipAllowList: []
+
+databases:
+  - name: risotto-db
+    plan: free
+    region: frankfurt
+    databaseName: risotto
+    user: risotto
