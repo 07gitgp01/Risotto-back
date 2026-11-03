@@ -100,7 +100,7 @@ export class ProfilesService {
 
   async setPhoto(userId: string, image: Buffer): Promise<OwnProfileView> {
     const profile = await this.getEntity(userId);
-    const key = await this.photos.save(image);
+    const key = await this.photos.save(userId, image);
     await this.profiles.update({ userId }, { photoKey: key, updatedAt: new Date() });
     if (profile.photoKey) {
       await this.photos.remove(profile.photoKey);
