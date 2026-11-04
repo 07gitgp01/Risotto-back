@@ -1,4 +1,4 @@
-import configuration, { parseCorsOrigins, parseTrustProxy } from './configuration';
+import configuration, { parseCorsOrigins, parseTrustProxy, stripSslParams } from './configuration';
 
 describe('parseCorsOrigins', () => {
   it('returns an empty list when unset or blank (deny all browser origins)', () => {
@@ -19,6 +19,18 @@ describe('parseTrustProxy', () => {
     expect(parseTrustProxy('1')).toBe(1);
     expect(parseTrustProxy(undefined)).toBe('loopback');
     expect(parseTrustProxy('loopback')).toBe('loopback');
+  });
+});
+
+describe('stripSslParams', () => {
+  it('removes TLS parameters so DB_SSL / DB_SSL_CA decide', () => {
+    const base = 'postgresql://postgres.ref:p%40ss@aws-0-eu.pooler.supabase.com:5432/postgres';
+    expect(stripSslParams(`${base}?sslmode=require`)).toBe(base);
+    expect(stripSslParams(`${base}?sslmode=require&application_name=risotto`)).toBe(
+      `${base}?application_name=risotto`,
+    );
+    expect(stripSslParams(base)).toBe(base);
+    expect(stripSslParams('')).toBeUndefined();
   });
 });
 

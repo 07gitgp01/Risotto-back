@@ -65,6 +65,22 @@ export function parseTrustProxy(raw: string | undefined): number | 'loopback' {
   return raw && /^\d+$/.test(raw) ? Number(raw) : 'loopback';
 }
 
+/**
+ * Drops the TLS query parameters (`sslmode=require`… as in Supabase URLs): pg lets
+ * them override the `ssl` option, which would discard the CA from DB_SSL_CA.
+ * TLS is driven by DB_SSL / DB_SSL_CA only.
+ */
+export function stripSslParams(url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined;
+  }
+  const [base, query] = url.split('?', 2);
+  const kept = (query ?? '')
+    .split('&')
+    .filter((param) => param && !/^(ssl[a-z]*|uselibpqcompat)=/i.test(param));
+  return kept.length > 0 ? `${base}?${kept.join('&')}` : base;
+}
+
 /** Builds the typed config from already-validated env variables. */
 export default (): AppConfig => ({
   nodeEnv: (process.env.NODE_ENV as AppConfig['nodeEnv']) ?? 'development',
@@ -72,7 +88,7 @@ export default (): AppConfig => ({
   corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   db: {
-    url: process.env.DATABASE_URL || undefined,
+    url: stripSslParams(process.env.DATABASE_URL),
     ssl: process.env.DB_SSL === 'true',
     // A one-line value may carry literal "\n" instead of line breaks.
     sslCa: (process.env.DB_SSL_CA ?? '').replace(/\\n/g, '\n'),

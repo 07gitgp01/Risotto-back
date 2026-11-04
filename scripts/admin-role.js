@@ -21,13 +21,22 @@ if (!['grant', 'revoke'].includes(action) || !email) {
   process.exit(1);
 }
 
+// TLS parameters in the URL (sslmode=require…) would override `ssl` and drop the CA.
+function stripSslParams(url) {
+  const [base, query] = url.split('?', 2);
+  const kept = (query ?? '')
+    .split('&')
+    .filter((param) => param && !/^(ssl[a-z]*|uselibpqcompat)=/i.test(param));
+  return kept.length > 0 ? `${base}?${kept.join('&')}` : base;
+}
+
 async function main() {
   const caFile = process.env.DB_SSL_CA_FILE;
   const ssl =
     process.env.DB_SSL === 'true' ? (caFile ? { ca: readFileSync(caFile, 'utf8') } : true) : false;
   const client = new Client(
     process.env.DATABASE_URL
-      ? { connectionString: process.env.DATABASE_URL, ssl }
+      ? { connectionString: stripSslParams(process.env.DATABASE_URL), ssl }
       : {
           host: process.env.DB_HOST,
           port: Number(process.env.DB_PORT),
