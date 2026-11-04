@@ -1,4 +1,9 @@
-import configuration, { parseCorsOrigins, parseTrustProxy, stripSslParams } from './configuration';
+import configuration, {
+  normalizePem,
+  parseCorsOrigins,
+  parseTrustProxy,
+  stripSslParams,
+} from './configuration';
 
 describe('parseCorsOrigins', () => {
   it('returns an empty list when unset or blank (deny all browser origins)', () => {
@@ -31,6 +36,29 @@ describe('stripSslParams', () => {
     );
     expect(stripSslParams(base)).toBe(base);
     expect(stripSslParams('')).toBeUndefined();
+  });
+});
+
+describe('normalizePem', () => {
+  const pem = [
+    '-----BEGIN CERTIFICATE-----',
+    'A'.repeat(64),
+    'B'.repeat(10),
+    '-----END CERTIFICATE-----',
+  ].join('\n');
+
+  it('keeps a well-formed certificate', () => {
+    expect(normalizePem(pem)).toBe(pem);
+  });
+
+  it('restores line breaks flattened to spaces or escaped as \\n', () => {
+    expect(normalizePem(pem.replace(/\n/g, ' '))).toBe(pem);
+    expect(normalizePem(pem.replace(/\n/g, '\\n'))).toBe(pem);
+    expect(normalizePem(`  ${pem.replace(/\n/g, '\r\n')}\r\n`)).toBe(pem);
+  });
+
+  it('returns an empty string when unset', () => {
+    expect(normalizePem(undefined)).toBe('');
   });
 });
 

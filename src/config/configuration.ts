@@ -81,6 +81,24 @@ export function stripSslParams(url: string | undefined): string | undefined {
   return kept.length > 0 ? `${base}?${kept.join('&')}` : base;
 }
 
+/**
+ * Rebuilds PEM certificates whose line breaks were lost or escaped when pasted
+ * into a hosting dashboard (spaces or literal "\n" instead of newlines).
+ */
+export function normalizePem(raw: string | undefined): string {
+  const blocks = (raw ?? '').match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
+  if (!blocks) {
+    return (raw ?? '').trim();
+  }
+  return blocks
+    .map((block) => {
+      const body = block.replace(/-----(BEGIN|END) CERTIFICATE-----/g, '').replace(/\\n|\s/g, '');
+      const lines = body.match(/.{1,64}/g) ?? [];
+      return ['-----BEGIN CERTIFICATE-----', ...lines, '-----END CERTIFICATE-----'].join('\n');
+    })
+    .join('\n');
+}
+
 /** Builds the typed config from already-validated env variables. */
 export default (): AppConfig => ({
   nodeEnv: (process.env.NODE_ENV as AppConfig['nodeEnv']) ?? 'development',
@@ -90,8 +108,7 @@ export default (): AppConfig => ({
   db: {
     url: stripSslParams(process.env.DATABASE_URL),
     ssl: process.env.DB_SSL === 'true',
-    // A one-line value may carry literal "\n" instead of line breaks.
-    sslCa: (process.env.DB_SSL_CA ?? '').replace(/\\n/g, '\n'),
+    sslCa: normalizePem(process.env.DB_SSL_CA),
     host: process.env.DB_HOST ?? 'localhost',
     port: Number(process.env.DB_PORT ?? 5432),
     user: process.env.DB_USER ?? '',
