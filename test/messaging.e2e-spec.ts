@@ -9,6 +9,7 @@ import { DataSource } from 'typeorm';
 import { REDIS_CLIENT } from '../src/common/redis/redis.constants';
 import { bearer, registerUser, RegisteredUser } from './utils/auth-helpers';
 import { createTestApp, resetDatabase } from './utils/create-test-app';
+import { eventually } from './utils/eventually';
 import { createProfile } from './utils/profile-helpers';
 
 interface MessageEvent {
@@ -117,6 +118,12 @@ describe('Messaging (e2e)', () => {
       ['get', `/api/conversations/${randomUUID()}/messages`],
       ['post', `/api/conversations/${randomUUID()}/messages`],
       ['post', `/api/conversations/${randomUUID()}/read`],
+      ['patch', `/api/conversations/${randomUUID()}/messages/${randomUUID()}`],
+      ['delete', `/api/conversations/${randomUUID()}/messages/${randomUUID()}`],
+      ['put', `/api/conversations/${randomUUID()}/messages/${randomUUID()}/reaction`],
+      ['delete', `/api/conversations/${randomUUID()}/messages/${randomUUID()}/reaction`],
+      ['get', '/api/presence/settings'],
+      ['put', '/api/presence/settings'],
     ] as const)('%s %s → 401', async (method, path) => {
       await request(server)[method](path).expect(401);
     });
@@ -396,6 +403,209 @@ describe('Messaging (e2e)', () => {
       const closed = nextEvent<string>(bobSocket, 'disconnect');
       await request(server).post('/api/auth/logout-all').set(bearer(bob.accessToken)).expect(204);
       expect(await closed).toBe('io server disconnect');
+    });
+  });
+  describe('replies, edits, deletion and reactions', () => {
+    const message = (user: RegisteredUser, id: string, payload: object) =>
+      request(server)
+        .post(`/api/conversations/${id}/messages`)
+        .set(bearer(user.accessToken))
+        .send(payload);
+
+    it('a reply carries a preview of the quoted message', async () => {
+      const id = await startConversation(alice, bob);
+      const first = await send(alice, id, 'On se voit jeudi ?').expect(201);
+      const reply = await message(bob, id, { body: 'Oui !', replyToId: first.body.id }).expect(201);
+      expect(reply.body.replyTo).toEqual({
+        id: first.body.id,
+        senderId: alice.id,
+        body: 'On se voit jeudi ?',
+        deleted: false,
+      });
+
+      await connect(alice, carol);
+      const other = await startConversation(alice, carol);
+      const elsewhere = await send(alice, other, 'ailleurs').expect(201);
+      await message(bob, id, { body: 'x', replyToId: elsewhere.body.id }).expect(400);
+    });
+
+    it('a retried send with the same clientId is stored once', async () => {
+      const id = await startConversation(alice, bob);
+      const clientId = randomUUID();
+      const first = await message(alice, id, { body: 'Bonjour', clientId }).expect(201);
+      const retry = await message(alice, id, { body: 'Bonjour', clientId }).expect(201);
+      expect(retry.body.id).toBe(first.body.id);
+      expect(first.body.clientId).toBe(clientId);
+      const [{ count }] = await app
+        .get(DataSource)
+        .query<{ count: string }[]>('SELECT count(*) FROM messages');
+      expect(Number(count)).toBe(1);
+    });
+
+    it('only the sender edits, during 15 minutes, and both sides are told', async () => {
+      const id = await startConversation(alice, bob);
+      const sent = await send(alice, id, 'Rendez-vous à 10 h').expect(201);
+      const path = `/api/conversations/${id}/messages/${sent.body.id}`;
+      const bobSocket = await openSocket(bob.accessToken);
+      const updated = nextEvent<{ id: string; body: string; editedAt: string }>(
+        bobSocket,
+        'message:updated',
+      );
+
+      await request(server)
+        .patch(path)
+        .set(bearer(bob.accessToken))
+        .send({ body: 'piraté' })
+        .expect(403);
+      await request(server)
+        .patch(path)
+        .set(bearer(carol.accessToken))
+        .send({ body: 'piraté' })
+        .expect(404);
+      const edited = await request(server)
+        .patch(path)
+        .set(bearer(alice.accessToken))
+        .send({ body: 'Rendez-vous à 11 h' })
+        .expect(200);
+      expect(edited.body).toMatchObject({ body: 'Rendez-vous à 11 h', deleted: false });
+      expect(edited.body.editedAt).not.toBeNull();
+      expect(await updated).toMatchObject({ id: sent.body.id, body: 'Rendez-vous à 11 h' });
+
+      await app
+        .get(DataSource)
+        .query(`UPDATE messages SET created_at = now() - interval '16 minutes'`);
+      await request(server)
+        .patch(path)
+        .set(bearer(alice.accessToken))
+        .send({ body: 'trop tard' })
+        .expect(403);
+    });
+
+    it('deleting for everyone wipes the encrypted body', async () => {
+      const id = await startConversation(alice, bob);
+      const sent = await send(alice, id, 'Message regretté').expect(201);
+      const reply = await message(bob, id, { body: 'Quoi ?', replyToId: sent.body.id });
+      const path = `/api/conversations/${id}/messages/${sent.body.id}`;
+
+      await request(server).delete(path).set(bearer(bob.accessToken)).expect(403);
+      const deleted = await request(server).delete(path).set(bearer(alice.accessToken)).expect(200);
+      expect(deleted.body).toMatchObject({ body: '', deleted: true, reactions: [] });
+
+      const [row] = await app
+        .get(DataSource)
+        .query<{ ciphertext: Buffer }[]>('SELECT ciphertext FROM messages WHERE id = $1', [
+          sent.body.id,
+        ]);
+      expect(row.ciphertext).toHaveLength(0);
+      await request(server)
+        .patch(path)
+        .set(bearer(alice.accessToken))
+        .send({ body: 'retour' })
+        .expect(409);
+
+      const history = await request(server)
+        .get(`/api/conversations/${id}/messages`)
+        .set(bearer(bob.accessToken))
+        .expect(200);
+      const quoted = (history.body.messages as { id: string; replyTo: unknown }[]).find(
+        (m) => m.id === reply.body.id,
+      );
+      expect(quoted?.replyTo).toMatchObject({ body: '', deleted: true });
+    });
+
+    it('each member has one reaction per message', async () => {
+      const id = await startConversation(alice, bob);
+      const sent = await send(alice, id, 'Projet signé').expect(201);
+      const path = `/api/conversations/${id}/messages/${sent.body.id}/reaction`;
+      const react = (user: RegisteredUser, emoji: string) =>
+        request(server).put(path).set(bearer(user.accessToken)).send({ emoji });
+
+      await react(bob, '👍').expect(200);
+      const replaced = await react(bob, '❤️').expect(200);
+      await react(alice, '👍🏽').expect(200);
+      expect(replaced.body.reactions).toEqual([{ emoji: '❤️', userId: bob.id }]);
+      await react(bob, 'abc').expect(400);
+      await react(bob, '123').expect(400);
+      await react(carol, '👍').expect(404);
+
+      const removed = await request(server).delete(path).set(bearer(bob.accessToken)).expect(200);
+      expect(removed.body.reactions).toEqual([{ emoji: '👍🏽', userId: alice.id }]);
+    });
+  });
+
+  describe('typing and presence', () => {
+    it('"typing" reaches the other participant only', async () => {
+      const id = await startConversation(alice, bob);
+      const aliceSocket = await openSocket(alice.accessToken);
+      const bobSocket = await openSocket(bob.accessToken);
+      const carolSocket = await openSocket(carol.accessToken);
+      const typing = nextEvent<{ conversationId: string; userId: string }>(bobSocket, 'typing');
+
+      const ack = (await aliceSocket.emitWithAck('typing', { conversationId: id })) as {
+        ok: boolean;
+      };
+      expect(ack.ok).toBe(true);
+      expect(await typing).toEqual({ conversationId: id, userId: alice.id });
+
+      const refused = (await carolSocket.emitWithAck('typing', { conversationId: id })) as {
+        ok: boolean;
+        status: number;
+      };
+      expect(refused).toMatchObject({ ok: false, status: 404 });
+    });
+
+    it('shows online, then last seen, and tells the partner', async () => {
+      const id = await startConversation(alice, bob);
+      const presenceOf = async () =>
+        (
+          await request(server)
+            .get(`/api/conversations/${id}`)
+            .set(bearer(alice.accessToken))
+            .expect(200)
+        ).body.presence as { online: boolean; lastSeenAt: string | null } | null;
+
+      expect(await presenceOf()).toEqual({ online: false, lastSeenAt: null });
+      const aliceSocket = await openSocket(alice.accessToken);
+      const told = nextEvent<{ userId: string; presence: { online: boolean } }>(
+        aliceSocket,
+        'presence',
+      );
+      const bobSocket = await openSocket(bob.accessToken);
+      expect(await told).toMatchObject({ userId: bob.id, presence: { online: true } });
+      await eventually(async () => expect((await presenceOf())?.online).toBe(true));
+
+      bobSocket.disconnect();
+      await eventually(async () => {
+        const presence = await presenceOf();
+        expect(presence?.online).toBe(false);
+        expect(presence?.lastSeenAt).not.toBeNull();
+      });
+    });
+
+    it('hiding one’s presence hides it both ways', async () => {
+      const id = await startConversation(alice, bob);
+      await request(server)
+        .put('/api/presence/settings')
+        .set(bearer(bob.accessToken))
+        .send({ sharePresence: false })
+        .expect(200, { sharePresence: false });
+      await request(server)
+        .get('/api/presence/settings')
+        .set(bearer(bob.accessToken))
+        .expect(200, { sharePresence: false });
+
+      for (const user of [alice, bob]) {
+        const res = await request(server)
+          .get(`/api/conversations/${id}`)
+          .set(bearer(user.accessToken))
+          .expect(200);
+        expect(res.body.presence).toBeNull();
+      }
+      await request(server)
+        .put('/api/presence/settings')
+        .set(bearer(bob.accessToken))
+        .send({ sharePresence: 'no' })
+        .expect(400);
     });
   });
 });

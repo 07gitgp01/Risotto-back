@@ -38,6 +38,14 @@ export class User {
   @Column({ name: 'suspended_at', type: 'timestamptz', nullable: true })
   suspendedAt: Date | null;
 
+  /** Last moment the user had the app open ("vu à 14 h 32"). */
+  @Column({ name: 'last_seen_at', type: 'timestamptz', nullable: true })
+  lastSeenAt: Date | null;
+
+  /** Online status and last seen are shared (and, in return, visible). */
+  @Column({ name: 'share_presence', type: 'boolean', default: true })
+  sharePresence: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

@@ -1,8 +1,18 @@
 import { Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OnGatewayConnection, OnGatewayInit, WebSocketGateway } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { TokensService } from '../auth/tokens.service';
-import { RealtimeService, userRoom } from './realtime.service';
+import {
+  RealtimeEvents,
+  RealtimeService,
+  SocketDisconnectedEvent,
+  SocketLifecycleEvent,
+  userRoom,
+} from './realtime.service';
+
+/** While a socket is open, presence is refreshed at this pace. */
+export const HEARTBEAT_MS = 45_000;
 
 export interface SocketData {
   userId: string;
@@ -25,6 +35,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   constructor(
     private readonly tokens: TokensService,
     private readonly realtime: RealtimeService,
+    private readonly events: EventEmitter2,
   ) {}
 
   afterInit(server: Server): void {
@@ -52,8 +63,28 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   }
 
   async handleConnection(socket: AuthenticatedSocket): Promise<void> {
-    await socket.join(userRoom(socket.data.userId));
-    this.logger.debug(`Socket connected for user ${socket.data.userId}`);
+    const { userId } = socket.data;
+    await socket.join(userRoom(userId));
+    this.logger.debug(`Socket connected for user ${userId}`);
+
+    const event: SocketLifecycleEvent = { userId };
+    this.events.emit(RealtimeEvents.connected, event);
+    const heartbeat = setInterval(
+      () => this.events.emit(RealtimeEvents.heartbeat, event),
+      HEARTBEAT_MS,
+    );
+    socket.once('disconnect', () => {
+      clearInterval(heartbeat);
+      void this.realtime
+        .socketCount(userId, socket.id)
+        .catch(() => 0)
+        .then((remaining) =>
+          this.events.emit(RealtimeEvents.disconnected, {
+            userId,
+            remaining,
+          } satisfies SocketDisconnectedEvent),
+        );
+    });
   }
 }
 

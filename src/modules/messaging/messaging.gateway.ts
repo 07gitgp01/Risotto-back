@@ -14,6 +14,7 @@ import {
   ReadReceipt,
   SocketConversationDto,
   SocketSendMessageDto,
+  TypingEvent,
 } from './dto/messaging.dto';
 import { MessagingService } from './messaging.service';
 
@@ -21,6 +22,9 @@ export type SocketAck<T> = { ok: true; data: T } | { ok: false; error: string; s
 
 const SEND_LIMIT = 20;
 const SEND_WINDOW_MS = 10_000;
+/** Clients send "typing" at most every few seconds while the user types. */
+const TYPING_LIMIT = 10;
+const TYPING_WINDOW_MS = 10_000;
 
 /**
  * Real-time messaging over the authenticated `/ws` namespace. Each event answers with
@@ -59,7 +63,29 @@ export class MessagingGateway {
       if (isBlocked) {
         throw new HttpException('Too many messages', 429);
       }
-      return this.messaging.send(socket.data.userId, dto.conversationId, dto.body);
+      const { conversationId, ...input } = dto;
+      return this.messaging.send(socket.data.userId, conversationId, input);
+    });
+  }
+
+  @SubscribeMessage('typing')
+  async typing(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody() body: unknown,
+  ): Promise<SocketAck<TypingEvent>> {
+    return this.handle(socket, async () => {
+      const dto = await this.validate(SocketConversationDto, body);
+      const { isBlocked } = await this.throttle.increment(
+        socket.data.userId,
+        TYPING_WINDOW_MS,
+        TYPING_LIMIT,
+        TYPING_WINDOW_MS,
+        'typing',
+      );
+      if (isBlocked) {
+        throw new HttpException('Too many typing events', 429);
+      }
+      return this.messaging.typing(socket.data.userId, dto.conversationId);
     });
   }
 

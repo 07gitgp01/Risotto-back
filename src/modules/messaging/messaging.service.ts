@@ -1,8 +1,14 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, In, QueryFailedError, Repository } from 'typeorm';
 import { MessageCipher } from '../../common/crypto/message-cipher';
 import { AppConfig } from '../../config/configuration';
 import { orderedPair } from '../connections/entities/connection.entity';
@@ -13,19 +19,43 @@ import { RelationshipService } from '../relationships/relationship.service';
 import {
   ConversationView,
   MessagePage,
+  MessagePreview,
   MessagesQuery,
   MessageView,
   ReadReceipt,
+  TypingEvent,
 } from './dto/messaging.dto';
 import { Conversation } from './entities/conversation.entity';
+import { MessageReaction } from './entities/message-reaction.entity';
 import { Message } from './entities/message.entity';
+import { PresenceService } from './presence.service';
 
 export const MessagingEvents = {
   messageNew: 'message:new',
+  /** Edited, deleted or reacted to: the full new view. */
+  messageUpdated: 'message:updated',
   conversationRead: 'conversation:read',
+  typing: 'typing',
 } as const;
 
 const CONVERSATION_NOT_FOUND = 'Conversation not found';
+const MESSAGE_NOT_FOUND = 'Message not found';
+/** Like WhatsApp: a typo can be fixed, a conversation cannot be rewritten later. */
+export const EDIT_WINDOW_MS = 15 * 60_000;
+const REPLY_PREVIEW_LENGTH = 200;
+
+export interface SendMessageInput {
+  body: string;
+  replyToId?: string;
+  clientId?: string;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof QueryFailedError &&
+    (error.driverError as { code?: string } | undefined)?.code === '23505'
+  );
+}
 
 @Injectable()
 export class MessagingService {
@@ -35,6 +65,8 @@ export class MessagingService {
     config: ConfigService,
     @InjectRepository(Conversation) private readonly conversations: Repository<Conversation>,
     @InjectRepository(Message) private readonly messages: Repository<Message>,
+    @InjectRepository(MessageReaction) private readonly reactions: Repository<MessageReaction>,
+    private readonly presence: PresenceService,
     private readonly relationships: RelationshipService,
     private readonly profiles: ProfilesService,
     private readonly realtime: RealtimeService,
@@ -110,27 +142,58 @@ export class MessagingService {
     const rows = await builder.getMany();
     const page = rows.slice(0, query.limit);
     return {
-      messages: page.map((row) => this.toView(row)),
+      messages: await this.toViews(page),
       nextCursor: rows.length > query.limit ? page[page.length - 1].id : null,
       otherLastReadAt: this.readMarkers(conversation, viewerId).other?.toISOString() ?? null,
     };
   }
 
-  /** Stores the message encrypted and pushes it to both participants' devices. */
-  async send(viewerId: string, conversationId: string, body: string): Promise<MessageView> {
+  /**
+   * Stores the message encrypted and pushes it to both participants' devices.
+   * Idempotent per `clientId`: a retry after a lost response returns the same message.
+   */
+  async send(
+    viewerId: string,
+    conversationId: string,
+    input: SendMessageInput,
+  ): Promise<MessageView> {
     const conversation = await this.getForMember(viewerId, conversationId);
+    const already = await this.findByClientId(viewerId, conversationId, input.clientId);
+    if (already) {
+      return already;
+    }
     const otherId = this.otherOf(conversation, viewerId);
     if (!(await this.relationships.areConnected(viewerId, otherId))) {
       throw new ForbiddenException('You can only message your connections');
     }
+    if (
+      input.replyToId &&
+      !(await this.messages.existsBy({ id: input.replyToId, conversationId }))
+    ) {
+      throw new BadRequestException('replyToId must be a message of this conversation');
+    }
 
-    const encrypted = this.cipher.encrypt(body, aad(conversationId, viewerId));
     const message = this.messages.create({
       conversationId,
       senderId: viewerId,
-      ...encrypted,
+      clientId: input.clientId ?? null,
+      replyToId: input.replyToId ?? null,
+      editedAt: null,
+      deletedAt: null,
+      ...this.cipher.encrypt(input.body, aad(conversationId, viewerId)),
     });
-    await this.messages.save(message);
+    try {
+      await this.messages.save(message);
+    } catch (error) {
+      // Two concurrent retries: the other one won.
+      const winner = isUniqueViolation(error)
+        ? await this.findByClientId(viewerId, conversationId, input.clientId)
+        : null;
+      if (winner) {
+        return winner;
+      }
+      throw error;
+    }
     await this.conversations.update(
       { id: conversationId },
       {
@@ -142,7 +205,7 @@ export class MessagingService {
       },
     );
 
-    const view: MessageView = { ...this.toView(message), body };
+    const [view] = await this.toViews([message]);
     this.realtime.emitToUser(otherId, MessagingEvents.messageNew, view);
     this.realtime.emitToUser(viewerId, MessagingEvents.messageNew, view);
     this.events.emit(DomainEvents.messageCreated, {
@@ -152,6 +215,74 @@ export class MessagingService {
       recipientId: otherId,
     } satisfies MessageCreatedEvent);
     return view;
+  }
+
+  /** The sender fixes a message during the first minutes. */
+  async edit(
+    viewerId: string,
+    conversationId: string,
+    messageId: string,
+    body: string,
+  ): Promise<MessageView> {
+    const conversation = await this.getForMember(viewerId, conversationId);
+    const message = await this.ownMessage(viewerId, conversationId, messageId);
+    if (Date.now() - message.createdAt.getTime() > EDIT_WINDOW_MS) {
+      throw new ForbiddenException('Messages can only be edited for 15 minutes');
+    }
+    if (!(await this.relationships.areConnected(viewerId, this.otherOf(conversation, viewerId)))) {
+      throw new ForbiddenException('You can only message your connections');
+    }
+    Object.assign(message, this.cipher.encrypt(body, aad(conversationId, viewerId)), {
+      editedAt: new Date(),
+    });
+    await this.messages.save(message);
+    return this.broadcastUpdate(conversation, message);
+  }
+
+  /** Deleted for everyone: the encrypted body is wiped, not just hidden. */
+  async remove(viewerId: string, conversationId: string, messageId: string): Promise<MessageView> {
+    const conversation = await this.getForMember(viewerId, conversationId);
+    const message = await this.ownMessage(viewerId, conversationId, messageId);
+    Object.assign(message, {
+      ciphertext: Buffer.alloc(0),
+      iv: Buffer.alloc(0),
+      authTag: Buffer.alloc(0),
+      deletedAt: new Date(),
+    });
+    await this.messages.save(message);
+    await this.reactions.delete({ messageId });
+    return this.broadcastUpdate(conversation, message);
+  }
+
+  /** Sets (or, with null, removes) the viewer's reaction to a message. */
+  async react(
+    viewerId: string,
+    conversationId: string,
+    messageId: string,
+    emoji: string | null,
+  ): Promise<MessageView> {
+    const conversation = await this.getForMember(viewerId, conversationId);
+    const message = await this.messages.findOneBy({ id: messageId, conversationId });
+    if (!message) {
+      throw new NotFoundException(MESSAGE_NOT_FOUND);
+    }
+    if (message.deletedAt) {
+      throw new ConflictException('Message deleted');
+    }
+    if (emoji) {
+      await this.reactions.upsert({ messageId, userId: viewerId, emoji }, ['messageId', 'userId']);
+    } else {
+      await this.reactions.delete({ messageId, userId: viewerId });
+    }
+    return this.broadcastUpdate(conversation, message);
+  }
+
+  /** "En train d'écrire…", sent to the other participant only. */
+  async typing(viewerId: string, conversationId: string): Promise<TypingEvent> {
+    const conversation = await this.getForMember(viewerId, conversationId);
+    const event: TypingEvent = { conversationId, userId: viewerId };
+    this.realtime.emitToUser(this.otherOf(conversation, viewerId), MessagingEvents.typing, event);
+    return event;
   }
 
   /** Marks everything as read and tells the other participant (read receipt). */
@@ -210,6 +341,55 @@ export class MessagingService {
     return conversation;
   }
 
+  private async findByClientId(
+    viewerId: string,
+    conversationId: string,
+    clientId: string | undefined,
+  ): Promise<MessageView | null> {
+    if (!clientId) {
+      return null;
+    }
+    const existing = await this.messages.findOneBy({ senderId: viewerId, clientId });
+    if (!existing) {
+      return null;
+    }
+    if (existing.conversationId !== conversationId) {
+      throw new ConflictException('clientId already used');
+    }
+    const [view] = await this.toViews([existing]);
+    return view;
+  }
+
+  /** A message of the viewer, still there (edit, delete). */
+  private async ownMessage(
+    viewerId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<Message> {
+    const message = await this.messages.findOneBy({ id: messageId, conversationId });
+    if (!message) {
+      throw new NotFoundException(MESSAGE_NOT_FOUND);
+    }
+    if (message.senderId !== viewerId) {
+      throw new ForbiddenException('Only the sender can change a message');
+    }
+    if (message.deletedAt) {
+      throw new ConflictException('Message deleted');
+    }
+    return message;
+  }
+
+  private async broadcastUpdate(
+    conversation: Conversation,
+    message: Message,
+  ): Promise<MessageView> {
+    const [view] = await this.toViews([message]);
+    for (const userId of [conversation.userAId, conversation.userBId]) {
+      this.realtime.emitToUser(userId, MessagingEvents.messageUpdated, view);
+    }
+    return view;
+  }
+
   private async view(viewerId: string, conversation: Conversation): Promise<ConversationView> {
     const [view] = await this.views(viewerId, [conversation]);
     if (!view) {
@@ -232,7 +412,7 @@ export class MessagingService {
     const ids = conversations.map((c) => c.id);
     const otherIds = conversations.map((c) => this.otherOf(c, viewerId));
 
-    const [relationships, profiles, lastMessages, unreadRows] = await Promise.all([
+    const [relationships, profiles, lastMessages, unreadRows, presence] = await Promise.all([
       this.relationships.resolveMany(viewerId, otherIds),
       this.profiles.viewsFor(viewerId, otherIds),
       this.messages
@@ -256,8 +436,11 @@ export class MessagingService {
          GROUP BY m.conversation_id`,
         [viewerId, ids],
       ),
+      this.presence.viewsFor(viewerId, otherIds),
     ]);
-    const lastByConversation = new Map(lastMessages.map((m) => [m.conversationId, m]));
+    const lastByConversation = new Map(
+      (await this.toViews(lastMessages)).map((m) => [m.conversationId, m]),
+    );
     const unread = new Map(unreadRows.map((row) => [row.id, Number(row.count)]));
 
     return conversations.flatMap((conversation) => {
@@ -272,9 +455,10 @@ export class MessagingService {
         {
           id: conversation.id,
           user: profile,
-          lastMessage: last ? this.toView(last) : null,
+          lastMessage: last ?? null,
           unreadCount: unread.get(conversation.id) ?? 0,
           otherLastReadAt: this.readMarkers(conversation, viewerId).other?.toISOString() ?? null,
+          presence: presence.get(otherId) ?? null,
           canSend: relationship === 'connected',
           updatedAt: (conversation.lastMessageAt ?? conversation.createdAt).toISOString(),
         },
@@ -282,14 +466,55 @@ export class MessagingService {
     });
   }
 
-  private toView(message: Message): MessageView {
+  /** Views with reply previews and reactions, in two queries for the whole batch. */
+  private async toViews(messages: Message[]): Promise<MessageView[]> {
+    if (messages.length === 0) {
+      return [];
+    }
+    const replyIds = [
+      ...new Set(messages.map((m) => m.replyToId).filter((id): id is string => id !== null)),
+    ];
+    const [reactions, replies] = await Promise.all([
+      this.reactions.find({
+        where: { messageId: In(messages.map((m) => m.id)) },
+        order: { createdAt: 'ASC' },
+      }),
+      replyIds.length > 0 ? this.messages.findBy({ id: In(replyIds) }) : Promise.resolve([]),
+    ]);
+    const repliesById = new Map(replies.map((reply) => [reply.id, reply]));
+
+    return messages.map((message) => {
+      const replyTo = message.replyToId ? repliesById.get(message.replyToId) : undefined;
+      return {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        body: this.bodyOf(message),
+        createdAt: message.createdAt.toISOString(),
+        editedAt: message.editedAt?.toISOString() ?? null,
+        deleted: message.deletedAt !== null,
+        replyTo: replyTo ? this.preview(replyTo) : null,
+        reactions: reactions
+          .filter((reaction) => reaction.messageId === message.id)
+          .map(({ emoji, userId }) => ({ emoji, userId })),
+        clientId: message.clientId,
+      };
+    });
+  }
+
+  private preview(message: Message): MessagePreview {
     return {
       id: message.id,
-      conversationId: message.conversationId,
       senderId: message.senderId,
-      body: this.cipher.decrypt(message, aad(message.conversationId, message.senderId)),
-      createdAt: message.createdAt.toISOString(),
+      body: this.bodyOf(message).slice(0, REPLY_PREVIEW_LENGTH),
+      deleted: message.deletedAt !== null,
     };
+  }
+
+  private bodyOf(message: Message): string {
+    return message.deletedAt
+      ? ''
+      : this.cipher.decrypt(message, aad(message.conversationId, message.senderId));
   }
 
   private otherOf(conversation: Conversation, viewerId: string): string {

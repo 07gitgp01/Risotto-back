@@ -57,7 +57,21 @@ export async function createTestApp(
 export async function resetDatabase(app: INestApplication): Promise<void> {
   const dataSource = app.get(DataSource);
   const tables = dataSource.entityMetadatas.map((meta) => `"${meta.tableName}"`).join(', ');
-  if (tables) {
-    await dataSource.query(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`);
+  if (!tables) {
+    return;
+  }
+  // Async handlers of the previous test (notifications, presence) may still write:
+  // a deadlock against the TRUNCATE is retried rather than failing the next test.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await dataSource.query(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`);
+      return;
+    } catch (error) {
+      const code = (error as { driverError?: { code?: string } }).driverError?.code;
+      if (code !== '40P01' || attempt >= 5) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+    }
   }
 }
