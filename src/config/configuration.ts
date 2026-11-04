@@ -82,20 +82,23 @@ export function stripSslParams(url: string | undefined): string | undefined {
 }
 
 /**
- * Rebuilds PEM certificates whose line breaks were lost or escaped when pasted
- * into a hosting dashboard (spaces or literal "\n" instead of newlines).
+ * Rebuilds PEM certificates mangled when pasted into a hosting dashboard: line
+ * breaks lost or escaped ("\n"), or the BEGIN/END lines left out.
  */
 export function normalizePem(raw: string | undefined): string {
-  const blocks = (raw ?? '').match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
-  if (!blocks) {
-    return (raw ?? '').trim();
-  }
-  return blocks
-    .map((block) => {
-      const body = block.replace(/-----(BEGIN|END) CERTIFICATE-----/g, '').replace(/\\n|\s/g, '');
-      const lines = body.match(/.{1,64}/g) ?? [];
-      return ['-----BEGIN CERTIFICATE-----', ...lines, '-----END CERTIFICATE-----'].join('\n');
-    })
+  const value = (raw ?? '').trim();
+  const blocks = value.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
+  const bodies = blocks
+    ? blocks.map((block) => block.replace(/-----(BEGIN|END) CERTIFICATE-----/g, ''))
+    : [value];
+  return bodies
+    .map((body) => body.replace(/\\n|\s/g, ''))
+    .filter((body) => /^[A-Za-z0-9+/]+=*$/.test(body))
+    .map((body) =>
+      ['-----BEGIN CERTIFICATE-----', ...body.match(/.{1,64}/g)!, '-----END CERTIFICATE-----'].join(
+        '\n',
+      ),
+    )
     .join('\n');
 }
 

@@ -57,6 +57,10 @@ describe('normalizePem', () => {
     expect(normalizePem(`  ${pem.replace(/\n/g, '\r\n')}\r\n`)).toBe(pem);
   });
 
+  it('adds the BEGIN/END lines when only the base64 body was pasted', () => {
+    expect(normalizePem(`${'A'.repeat(64)}\n${'B'.repeat(10)}`)).toBe(pem);
+  });
+
   it('returns an empty string when unset', () => {
     expect(normalizePem(undefined)).toBe('');
   });
